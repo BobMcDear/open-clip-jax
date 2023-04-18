@@ -32,10 +32,11 @@ class CLIPLoss(nn.Module):
             logits_per_image = jnp.exp(temp)*logits_per_image
             logits_per_text = jnp.exp(temp)*logits_per_text
 
-        labels = self.param(
+        labels = self.variable(
+            col='labels',
             name='labels',
-            init_fn=lambda _: jnp.arange(0, len(logits_per_image)),
-            )
+            init_fn=lambda: jnp.arange(0, len(logits_per_image)),
+            ).value
         return jnp.mean(
             softmax_cross_entropy_with_integer_labels(logits_per_image, labels) +
             softmax_cross_entropy_with_integer_labels(logits_per_text, labels)
