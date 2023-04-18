@@ -22,7 +22,7 @@ class TransformerBlock(nn.Module):
         expansion_factor: Expansion factor for the hidden layer of the MLP.
         act: Activation function applied in the hidden layer of the MLP.
         attention_bias: Whether the QKV and projection linear layers in the
-        attention module should contain bias terms.
+            attention module should contain bias terms.
         mlp_bias: Whether the linear layers in the MLP should contain bias
             terms.
         eps: Epsilon value passed to the layer normalization modules.

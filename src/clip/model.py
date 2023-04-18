@@ -35,8 +35,8 @@ class CLIP(nn.Module):
         image_model: Model used to extract feature vectors from image data.
         text_model: Model used to extract features vectors from text data.
         proj_dim: Dimension to which the image and text features are projected.
-        norm: Whether to take the norm of the feature vectors prior to
-            calculating their dot product.
+        norm: Whether to L2-normalize the feature vectors prior to calculating
+            their dot product.
         dtype: The data type of the computations.
     """
     image_model: nn.Module

@@ -19,6 +19,7 @@ class MLP(nn.Module):
             input features.
         expansion_factor: Expansion factor for the hidden layer.
         act: Activation function applied in the hidden layer.
+        bias: Whether the linear layers should contain bias terms.
         dtype: The data type of the computations.
     """
     out_dim: Optional[int] = None
@@ -68,7 +69,7 @@ class MultiHeadAttention(nn.MultiHeadDotProductAttention):
 
 def global_avg_pool(
     input: Any,
-    axis: Union[int,Tuple[int, ...]] = 1,
+    axis: Union[int, Tuple[int, ...]] = 1,
     ) -> Any:
     """
     Global average pooling over arbitrary axis.
