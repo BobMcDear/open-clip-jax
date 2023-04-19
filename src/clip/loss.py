@@ -54,7 +54,7 @@ class CLIPWithLoss(nn.Module):
             are scaled by when calculating the loss, with None for no scaling.
     """
     model: CLIP
-    temp_init: Optional[float] = 1.155
+    temp_init: Optional[float] = 2.6593
 
     @nn.compact
     def __call__(self, image_input: Any, text_input: Any) -> Any:
