@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 import jax
 from flax import linen as nn
-from jax import lax
 from jax import numpy as jnp
 from jax._src.numpy.lax_numpy import _ScalarMeta
 
@@ -145,7 +144,7 @@ class ClsToken(nn.Module):
         embed_dim = input.shape[-1]
         cls_token = self.param(
             name='cls_token',
-            init_fn=lambda prng: lax.rsqrt(embed_dim) * jax.random.normal(prng, embed_dim, dtype=input.dtype),
+            init_fn=lambda prng: (embed_dim ** -0.5) * jax.random.normal(prng, (embed_dim,), dtype=input.dtype),
             )
         cls_token = jnp.broadcast_to(cls_token, (len(input), 1, embed_dim))
         return jnp.concatenate([cls_token, input], axis=1)
@@ -160,7 +159,7 @@ class PosEmbed(nn.Module):
         shape = input.shape[-2:]
         pos_embed = self.param(
             name='pos_embed',
-            init_fn=lambda prng: lax.rsqrt(shape[-1]) * jax.random.normal(prng, shape, dtype=input.dtype),
+            init_fn=lambda prng: (shape[-1] ** -0.5) * jax.random.normal(prng, shape, dtype=input.dtype),
             )
         return pos_embed+input
 
