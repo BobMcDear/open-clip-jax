@@ -3,14 +3,12 @@ CLIP model.
 """
 
 
-from typing import Any
-
 from flax import linen as nn
+from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
-from jax._src.numpy.lax_numpy import _ScalarMeta
 
 
-def l2_norm(input: Any) -> Any:
+def l2_norm(input: Array) -> Array:
     """
     L2-normalizes the input.
 
@@ -43,10 +41,10 @@ class CLIP(nn.Module):
     text_model: nn.Module
     proj_dim: int = 512
     norm: bool = True
-    dtype: _ScalarMeta = jnp.float32
+    dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, image_input: Any, text_input: Any) -> Any:
+    def __call__(self, image_input: Array, text_input: Array) -> Array:
         image_output = self.image_model(image_input)
         text_output = self.text_model(text_input)
 

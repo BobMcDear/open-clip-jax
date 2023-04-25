@@ -3,12 +3,12 @@ Transformer model, with support for vision and text.
 """
 
 
-from typing import Any, Callable
+from typing import Callable
 
 import jax
 from flax import linen as nn
+from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
-from jax._src.numpy.lax_numpy import _ScalarMeta
 
 from .basic_layers import MLP, MultiHeadAttention, global_avg_pool
 
@@ -34,10 +34,10 @@ class TransformerBlock(nn.Module):
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
-    dtype: _ScalarMeta = jnp.float32
+    dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, input: Any) -> Any:
+    def __call__(self, input: Array) -> Array:
         residual = input
         output = nn.LayerNorm(
             epsilon=self.eps,
@@ -89,10 +89,10 @@ class Transformer(nn.Module):
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
-    dtype: _ScalarMeta = jnp.float32
+    dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, input: Any) -> Any:
+    def __call__(self, input: Array) -> Array:
         for _ in range(self.depth):
             input = TransformerBlock(
                 n_heads=self.n_heads,
@@ -119,10 +119,10 @@ class PatchEmbed(nn.Module):
     embed_dim: int
     patch_size: int = 16
     bias: bool = True
-    dtype: _ScalarMeta = jnp.float32
+    dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, input: Any) -> Any:
+    def __call__(self, input: Array) -> Array:
         output = nn.Conv(
             features=self.embed_dim,
             kernel_size=(self.patch_size, self.patch_size),
@@ -140,7 +140,7 @@ class ClsToken(nn.Module):
     Concatenates a class token to the beginning of the input.
     """
     @nn.compact
-    def __call__(self, input: Any) -> Any:
+    def __call__(self, input: Array) -> Array:
         embed_dim = input.shape[-1]
         cls_token = self.param(
             name='cls_token',
@@ -155,7 +155,7 @@ class PosEmbed(nn.Module):
     Adds position embedding vectors to the input.
     """
     @nn.compact
-    def __call__(self, input: Any) -> Any:
+    def __call__(self, input: Array) -> Array:
         shape = input.shape[-2:]
         pos_embed = self.param(
             name='pos_embed',
@@ -194,10 +194,10 @@ class VisionTransformer(nn.Module):
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
-    dtype: _ScalarMeta = jnp.float32
+    dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, input: Any) -> Any:
+    def __call__(self, input: Array) -> Array:
         output = PatchEmbed(
             embed_dim=self.embed_dim,
             patch_size=self.patch_size,
@@ -259,10 +259,10 @@ class TextTransformer(nn.Module):
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
-    dtype: _ScalarMeta = jnp.float32
+    dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, input: Any) -> Any:
+    def __call__(self, input: Array) -> Array:
         output = nn.Embed(
             num_embeddings=self.vocab_size,
             features=self.embed_dim,

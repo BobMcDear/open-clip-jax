@@ -3,9 +3,10 @@ CLIP (contrastive) loss.
 """
 
 
-from typing import Any, Optional
+from typing import Optional
 
 from flax import linen as nn
+from flax.linen.dtypes import Array
 from jax import numpy as jnp
 from optax import softmax_cross_entropy_with_integer_labels
 
@@ -23,11 +24,11 @@ class CLIPLoss(nn.Module):
     temp_init: Optional[float] = 1.155
 
     @nn.compact
-    def __call__(self, logits_per_image: Any, logits_per_text: Any) -> Any:
+    def __call__(self, logits_per_image: Array, logits_per_text: Array) -> Array:
         if self.temp_init:
             temp =  self.param(
                 name='temp',
-                init_fn=lambda _: jnp.array(self.temp_init),
+                init_fn=lambda _: jnp.array(self.temp_init, dtype=logits_per_image.dtype),
                 )
             logits_per_image = jnp.exp(temp)*logits_per_image
             logits_per_text = jnp.exp(temp)*logits_per_text
@@ -57,7 +58,7 @@ class CLIPWithLoss(nn.Module):
     temp_init: Optional[float] = 2.6593
 
     @nn.compact
-    def __call__(self, image_input: Any, text_input: Any) -> Any:
+    def __call__(self, image_input: Array, text_input: Array) -> Array:
         logits_per_image, logits_per_text = self.model(image_input, text_input)
         loss_fn = CLIPLoss(self.temp_init)
         return loss_fn(logits_per_image, logits_per_text)

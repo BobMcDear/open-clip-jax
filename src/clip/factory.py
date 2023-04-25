@@ -7,8 +7,8 @@ import json
 from typing import List
 from pathlib import Path
 
+from flax.linen.dtypes import Dtype
 from jax import numpy as jnp
-from jax._src.numpy.lax_numpy import _ScalarMeta
 
 from .model import CLIP
 from .transformer import TextTransformer, VisionTransformer
@@ -40,7 +40,7 @@ def list_models() -> List[str]:
 
 def create_model(
     model_name: str,
-    dtype: _ScalarMeta = jnp.float32,
+    dtype: Dtype = jnp.float32,
     ) -> CLIP:
     """
     Creates a CLIP model given its name.

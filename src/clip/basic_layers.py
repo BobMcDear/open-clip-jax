@@ -3,11 +3,11 @@ General-purpose deep learning layers.
 """
 
 
-from typing import Any, Callable, Optional, Union, Tuple
+from typing import Callable, Optional, Union, Tuple
 
 from flax import linen as nn
+from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
-from jax._src.numpy.lax_numpy import _ScalarMeta
 
 
 class MLP(nn.Module):
@@ -26,10 +26,10 @@ class MLP(nn.Module):
     expansion_factor: float = 4.
     act: Callable = nn.gelu
     bias: bool = True
-    dtype: _ScalarMeta = jnp.float32
+    dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, input: Any) -> Any:
+    def __call__(self, input: Array) -> Array:
         in_dim = input.shape[-1]
         hidden_dim = int(self.expansion_factor*in_dim)
         out_dim = self.out_dim or in_dim
@@ -58,19 +58,19 @@ class MultiHeadAttention(nn.MultiHeadDotProductAttention):
     @nn.compact
     def __call__(
         self,
-        inputs_q: Any,
-        inputs_kv: Optional[Any] = None,
-        mask: Optional[Any] = None,
+        inputs_q: Array,
+        inputs_kv: Optional[Array] = None,
+        mask: Optional[Array] = None,
         deterministic: Optional[bool] = None,
-        ) -> Any:
+        ) -> Array:
         inputs_kv = inputs_kv or inputs_q
         return super().__call__(inputs_q, inputs_kv, mask, deterministic)
 
 
 def global_avg_pool(
-    input: Any,
+    input: Array,
     axis: Union[int, Tuple[int, ...]] = 1,
-    ) -> Any:
+    ) -> Array:
     """
     Global average pooling over arbitrary axis.
 
