@@ -6,6 +6,7 @@ Data loading with TensorFlow for training CLIP models.
 from typing import Callable, Optional, Tuple
 from functools import partial
 
+import pandas as pd
 import tensorflow as tf
 from tensorflow_models.vision import augment
 from transformers import TFGPT2Tokenizer
@@ -161,7 +162,8 @@ def create_csv_dataset(
         dtype: The data type the images are converted to.
 
     Returns:
-        TensorFlow dataset of (image, text) pairs.
+        Dataset of (image, text) pairs and an n_iters_per_epoch attribute
+        denoting thenumber of iterations per epoch.
     """
     dataset = tf.data.experimental.CsvDataset(
         path_csv,
@@ -172,8 +174,8 @@ def create_csv_dataset(
 
     aug = augment.AutoAugment(auto_aug_policy).distort if auto_aug_policy else None
     tokenizer = TFGPT2Tokenizer.from_pretrained('gpt2', max_length=context_len)
-    map_item_ = partial(map_item, train=train, image_size=image_size)
-    map_batch_ = partial(
+    map_item_with_args = partial(map_item, train=train, image_size=image_size)
+    map_batch_with_args = partial(
         map_batch,
         tokenizer=tokenizer,
         aug=aug,
@@ -185,10 +187,11 @@ def create_csv_dataset(
         dataset = dataset.shuffle(shuffle_buffer_size)
     dataset = (dataset
         .repeat(n_epochs)
-        .map(map_item_, tf.data.AUTOTUNE)
+        .map(map_item_with_args, tf.data.AUTOTUNE)
         .batch(batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE)
-        .map(map_batch_, tf.data.AUTOTUNE)
+        .map(map_batch_with_args, tf.data.AUTOTUNE)
         .prefetch(tf.data.AUTOTUNE)
         )
+    dataset.n_iters_per_epoch = len(pd.read_csv(path_csv)) // batch_size
 
     return dataset
