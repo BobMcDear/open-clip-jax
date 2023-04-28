@@ -2,7 +2,7 @@
 	"image_model": {
 		"depth": 12,
 		"embed_dim": 768,
-		"n_heads": 8,
+		"n_heads": 12,
 		"patch_size": 32
 	},
 	"text_model": {
