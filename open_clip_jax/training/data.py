@@ -133,7 +133,7 @@ def create_csv_dataset(
     auto_aug_policy: Optional[str] = None,
     context_len: int = 77,
     n_epochs: int = 32,
-    batch_size: int = 64,
+    global_batch_size: int = 64,
     shuffle_buffer_size: Optional[int] = None,
     dtype: tf.DType = tf.float32,
     ) -> tf.data.Dataset:
@@ -156,9 +156,9 @@ def create_csv_dataset(
         context_len: Context length of the tokenized text. Tokens are padded or
             truncated to ensure the number of tokens is context_len.
         n_epochs: Number of epochs the model will train for.
-        batch_size: Batch size.
+        global_batch_size: Global batch size across all devices.
         shuffle_buffer_size: Buffer size for shuffling when train is True. If
-            None, it is set to 16*batch_size (general rule of thumb).
+            None, it is set to 16*global_batch_size (general rule of thumb).
         dtype: The data type the images are converted to.
 
     Returns:
@@ -183,15 +183,15 @@ def create_csv_dataset(
         )
 
     if train:
-        shuffle_buffer_size = shuffle_buffer_size or 16*batch_size
+        shuffle_buffer_size = shuffle_buffer_size or 16*global_batch_size
         dataset = dataset.shuffle(shuffle_buffer_size)
     dataset = (dataset
         .repeat(n_epochs)
         .map(map_item_with_args, tf.data.AUTOTUNE)
-        .batch(batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE)
+        .batch(global_batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE)
         .map(map_batch_with_args, tf.data.AUTOTUNE)
         .prefetch(tf.data.AUTOTUNE)
         )
-    dataset.n_iters_per_epoch = len(pd.read_csv(path_csv)) // batch_size
+    dataset.n_iters_per_epoch = len(pd.read_csv(path_csv)) // global_batch_size
 
     return dataset

@@ -5,15 +5,17 @@ Core code for training CLIP models.
 
 import logging
 import pickle
-from typing import Any, Tuple
+from typing import Any, Iterable, Tuple
 from functools import partial
 
 import jax
 import tensorflow as tf
+from flax import jax_utils
 from flax.core import frozen_dict
 from flax.linen.dtypes import Array
 from flax.training import train_state
 from flax.training.dynamic_scale import DynamicScale
+from jax import lax
 from jax import numpy as jnp
 
 
@@ -64,7 +66,7 @@ class TrainState(train_state.TrainState):
     dynamic_scale: DynamicScale
 
 
-@jax.jit
+@partial(jax.pmap, axis_name='devices')
 def train_iter(
     state: TrainState,
     image_input: Array,
@@ -89,11 +91,16 @@ def train_iter(
         return state.apply_fn(vars, image_input, text_input)
 
     if state.dynamic_scale:
-        loss_and_grad_fn = state.dynamic_scale.value_and_grad(loss_fn)
+        loss_and_grad_fn = state.dynamic_scale.value_and_grad(
+            fun=loss_fn,
+            axis_name='devices',
+            )
         dynamic_scale, is_finite, loss, grads = loss_and_grad_fn(state.params)
+        # Dynamic scale averages gradients across devices automatically
     else:
         loss_and_grad_fn = jax.value_and_grad(loss_fn)
         loss, grads = loss_and_grad_fn(state.params)
+        grads = lax.pmean(grads, axis_name='devices')
 
     # After update, in case of mixed-precision training,
     # parameters with NaN/infinite gradients are restored.
@@ -115,15 +122,15 @@ def train_iter(
             dynamic_scale=dynamic_scale,
             )
 
-    return updated_state, loss
+    return updated_state, lax.pmean(loss, axis_name='devices')
 
 
-@jax.jit
+@partial(jax.pmap, axis_name='devices')
 def valid_iter(
     state: TrainState,
     image_input: Array,
     text_input: Array,
-    ) -> Tuple[TrainState, Array]:
+    ) -> Array:
     """
     Performs one validation iteration.
 
@@ -139,20 +146,56 @@ def valid_iter(
         'params': state.params,
         'labels': state.labels,
         }
-    return state.apply_fn(vars, image_input, text_input)
+    loss = state.apply_fn(vars, image_input, text_input)
+    return lax.pmean(loss, axis_name='devices')
 
 
-def tf_to_jax(pytree: PyTree) -> PyTree:
+def tf_to_np(pytree: PyTree, device_axis: bool = True) -> PyTree:
     """
-    Converts TensorFlow tensors into JAX arrays.
+    Converts TensorFlow tensors into NumPy arrays.
 
     Args:
         pytree: PyTree with TensorFlow tensors as leaves.
+        device_axis: Whether to add a leading device axis to the data for
+            distributed training.
 
     Returns:
-        Input PyTree with its leaves converted into JAX arrays.
+        Input PyTree with its leaves converted into NumPy arrays and
+        potentially an additional device axis.
     """
-    return jax.tree_util.tree_map(lambda leaf: leaf._numpy(), pytree)
+    device_count = jax.local_device_count()
+    def _tf_to_jax(leaf):
+        leaf = leaf._numpy()
+        if device_axis:
+            # [global_batch_size, ...] to [device_count, local_batch_size, ...]
+            leaf = leaf.reshape((device_count, -1) + leaf.shape[1:])
+        return leaf
+
+    return jax.tree_util.tree_map(_tf_to_jax, pytree)
+
+
+def tf_dataset_to_np_iter(
+    dataset: tf.data.Dataset,
+    device_axis: bool = True,
+    ) -> Iterable:
+    """
+    Converts a TensorFlow dataset into an iterator yielding NumPy ararys.
+
+    Args:
+        dataset: TensorFlow dataset to convert into an iterator.
+        device_axis: Whether to add a leading device axis to the data for
+            distributed training.
+
+    Returns:
+        Iterator yielding NumPy arrays from dataset, potentially with an
+        additional device axis.
+    """
+    dataset_iter = map(partial(tf_to_np, device_axis=device_axis), dataset)
+    # Pre-fetching data to device speeds up GPU training,
+    # but is not necessary for CPU/TPU.
+    if jax.local_devices()[0].platform == 'gpu':
+        dataset_iter = jax_utils.prefetch_to_device(dataset_iter, size=2)
+    return dataset_iter
 
 
 def train_and_validate(
@@ -180,10 +223,11 @@ def train_and_validate(
         save_freq: The CLIP model's parameters are saved every save_freq
             epochs.
     """
-    train_dataset_iter = map(tf_to_jax, train_dataset)
-    valid_dataset_iter = map(tf_to_jax, valid_dataset)
-
+    state = jax_utils.replicate(state)
+    train_dataset_iter = tf_dataset_to_np_iter(train_dataset)
+    valid_dataset_iter = tf_dataset_to_np_iter(valid_dataset)
     loss_meter = AvgMeter()
+
     for epoch in range(1, n_epochs+1):
         logging.info(f'Beginning epoch {epoch}...')
 
@@ -192,7 +236,7 @@ def train_and_validate(
         for iter_ind in range(1, train_dataset.n_iters_per_epoch+1):
             image_input, text_input = next(train_dataset_iter)
             state, loss = train_iter(state, image_input, text_input)
-            loss_meter.update(loss, len(image_input))
+            loss_meter.update(loss[0], len(image_input))
 
             # Temperature coefficient is clipped to [0, ln(100)].
             params = state.params.unfreeze()
@@ -217,7 +261,7 @@ def train_and_validate(
         for iter_ind in range(1, valid_dataset.n_iters_per_epoch+1):
             image_input, text_input = next(valid_dataset_iter)
             loss = valid_iter(state, image_input, text_input)
-            loss_meter.update(loss, len(image_input))
+            loss_meter.update(loss[0], len(image_input))
 
             if iter_ind % log_freq == 0 or iter_ind == valid_dataset.n_iters_per_epoch:
                 message = (

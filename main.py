@@ -79,16 +79,16 @@ def parse_args() -> Namespace:
         help='Context length of the tokenized text. Tokens are padded or truncated to ensure the number of tokens is context_len.',
         )
     parser.add_argument(
-        '--batch-size',
+        '--global-batch-size',
         type=int,
         default=64,
-        help='Batch size.',
+        help='Global batch size across all devices.',
         )
     parser.add_argument(
         '--shuffle-buffer-size',
         type=int,
         default=None,
-        help='Buffer size for shuffling the training set. If None, it is set to 16*batch_size (general rule of thumb).',
+        help='Buffer size for shuffling the training set. If None, it is set to 16*global_batch_size (general rule of thumb).',
         )
 
     # CLIP model
@@ -97,7 +97,7 @@ def parse_args() -> Namespace:
         type=str,
         choices=list_models(),
         default='vit-base-patch16',
-        help='Name of CLIP model to train. See src/clip/model_configs/ for available options.',
+        help='Name of CLIP model to train. See open_clip_jax/clip/model_configs/ for available options.',
         )
     parser.add_argument(
         '--temp-init',
@@ -113,7 +113,8 @@ def parse_args() -> Namespace:
         default=5e-4,
         help=(
             'Peak learning rate for the cosine decay scheduler and the constant learning rate for the constant scheduler. '
-            'See --learning-rate-scheduler to the scheduler.'
+            'See --learning-rate-scheduler to select the scheduler. '
+            'Note that the learning rate is not scaled automatically, and the user should adjust it according to the batch size.'
             ),
         )
     parser.add_argument(
@@ -176,7 +177,7 @@ def parse_args() -> Namespace:
         default='float32',
         help=(
             'The data type training is performed in. '
-            'Note that some operations are conducted in float32 regardless of --dtype.'
+            'Note that some operations are conducted in float32 regardless of --dtype (i.e., automatic mixed precision).'
             ),
         )
 
@@ -234,7 +235,7 @@ def main(args: Namespace) -> None:
         image_size=args.image_size,
         context_len=args.context_len,
         n_epochs=args.n_epochs,
-        batch_size=args.batch_size,
+        global_batch_size=args.global_batch_size,
         dtype=getattr(tf, args.dtype),
         )
     train_dataset = create_csv_dataset_with_args(
@@ -253,11 +254,11 @@ def main(args: Namespace) -> None:
     dtype = getattr(jnp, args.dtype)
     model = create_model(model_name=args.model_name, dtype=dtype)
     model_with_loss = CLIPWithLoss(model, temp_init=args.temp_init)
-    rng = jax.random.PRNGKey(0)
+    local_batch_size = args.global_batch_size // jax.local_device_count()
     vars = jax.jit(model_with_loss.init)(
-        rngs=rng,
-        image_input=jnp.empty((args.batch_size, args.image_size, args.image_size, 3), dtype=dtype),
-        text_input=jnp.empty((args.batch_size, args.context_len), dtype=jnp.int32),
+        rngs=jax.random.PRNGKey(0),
+        image_input=jnp.empty((local_batch_size, args.image_size, args.image_size, 3), dtype=dtype),
+        text_input=jnp.empty((local_batch_size, args.context_len), dtype=jnp.int32),
         )
     logging.info(f'Model created: {model}')
 
