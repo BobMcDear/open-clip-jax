@@ -33,13 +33,16 @@ class CLIP(nn.Module):
         image_model: Model used to extract feature vectors from image data.
         text_model: Model used to extract features vectors from text data.
         proj_dim: Dimension to which the image and text features are projected.
-        norm: Whether to L2-normalize the feature vectors prior to calculating
-            their dot product.
+        proj_bias: Whether the linear projection layers should contain bias
+            terms.
+        norm: Whether to L2-normalize the projected feature vectors prior to
+            calculating their dot product.
         dtype: The data type of the computations.
     """
     image_model: nn.Module
     text_model: nn.Module
     proj_dim: int = 512
+    proj_bias: bool = False
     norm: bool = True
     dtype: Dtype = jnp.float32
 
@@ -50,10 +53,12 @@ class CLIP(nn.Module):
 
         image_projection = nn.Dense(
             features=self.proj_dim,
+            use_bias=self.proj_bias,
             dtype=self.dtype,
             )(image_output)
         text_projection = nn.Dense(
             features=self.proj_dim,
+            use_bias=self.proj_bias,
             dtype=self.dtype,
             )(text_output)
 
