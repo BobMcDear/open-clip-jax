@@ -182,6 +182,8 @@ class VisionTransformer(nn.Module):
         mlp_bias: Whether the linear layers in the MLPs should contain bias
             terms.
         eps: Epsilon value passed to the layer normalization modules.
+        global_pool: Whether to globally average pool the tokens before
+            returning. If False, only the class token is returned.
         dtype: The data type of the computations.
     """
     depth: int
@@ -194,6 +196,7 @@ class VisionTransformer(nn.Module):
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
+    global_pool: bool = False
     dtype: Dtype = jnp.float32
 
     @nn.compact
@@ -223,13 +226,16 @@ class VisionTransformer(nn.Module):
             dtype=self.dtype,
             )(output)
 
-        output = global_avg_pool(output)
-        output = nn.LayerNorm(
+        if self.global_pool:
+            pooled = global_avg_pool(output)
+        else:
+            pooled = output[:, 0]
+        pooled = nn.LayerNorm(
                 epsilon=self.eps,
                 dtype=self.dtype,
-                )(output)
+                )(pooled)
 
-        return output
+        return pooled
 
 
 class TextTransformer(nn.Module):
@@ -248,6 +254,8 @@ class TextTransformer(nn.Module):
         mlp_bias: Whether the linear layers in the MLPs should contain bias
             terms.
         eps: Epsilon value passed to the layer normalization modules.
+        global_pool: Whether to globally average pool the tokens before
+            returning. If False, only the end-of-stream token is returned.
         dtype: The data type of the computations.
     """
     depth: int
@@ -259,6 +267,7 @@ class TextTransformer(nn.Module):
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
+    global_pool: bool = False
     dtype: Dtype = jnp.float32
 
     @nn.compact
@@ -268,7 +277,6 @@ class TextTransformer(nn.Module):
             features=self.embed_dim,
             dtype=self.dtype,
             )(input)
-        output = ClsToken()(output)
         output = PosEmbed()(output)
 
         output = Transformer(
@@ -282,10 +290,15 @@ class TextTransformer(nn.Module):
             dtype=self.dtype,
             )(output)
 
-        output = global_avg_pool(output)
+        # Unlike ViTs, layer normalization is applied before extracting tokens.
         output = nn.LayerNorm(
                 epsilon=self.eps,
                 dtype=self.dtype,
                 )(output)
+        if self.global_pool:
+            pooled = global_avg_pool(output)
+        else:
+            # The end-of-stream token is always the highest.
+            pooled = output[jnp.arange(len(input)), jnp.argmax(input, axis=1)]
 
-        return output
+        return pooled
