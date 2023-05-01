@@ -4,10 +4,14 @@ General-purpose deep learning layers.
 
 
 from typing import Callable, Optional, Union, Tuple
+from functools import partial
 
 from flax import linen as nn
 from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
+
+
+gelu = partial(nn.gelu, approximate=False)
 
 
 class MLP(nn.Module):
@@ -24,7 +28,7 @@ class MLP(nn.Module):
     """
     out_dim: Optional[int] = None
     expansion_factor: float = 4.
-    act: Callable = nn.gelu
+    act: Callable = gelu
     bias: bool = True
     dtype: Dtype = jnp.float32
 
@@ -42,6 +46,7 @@ class MLP(nn.Module):
         output = self.act(output)
         output = nn.Dense(
             features=out_dim,
+            use_bias=self.bias,
             dtype=self.dtype,
             )(output)
 

@@ -10,7 +10,7 @@ from flax import linen as nn
 from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
 
-from .basic_layers import MLP, MultiHeadAttention, global_avg_pool
+from .basic_layers import MLP, MultiHeadAttention, gelu, global_avg_pool
 
 
 class TransformerBlock(nn.Module):
@@ -30,7 +30,7 @@ class TransformerBlock(nn.Module):
     """
     n_heads: int
     expansion_factor: float = 4.
-    act: Callable = nn.gelu
+    act: Callable = gelu
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
@@ -85,7 +85,7 @@ class Transformer(nn.Module):
     depth: int
     n_heads: int
     expansion_factor: float = 4.
-    act: Callable = nn.gelu
+    act: Callable = gelu
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
@@ -191,7 +191,7 @@ class VisionTransformer(nn.Module):
     n_heads: int
     patch_size: int = 16
     expansion_factor: float = 4.
-    act: Callable = nn.gelu
+    act: Callable = gelu
     pre_norm: bool = True
     attention_bias: bool = True
     mlp_bias: bool = True
@@ -263,7 +263,7 @@ class TextTransformer(nn.Module):
     n_heads: int
     vocab_size: int = 50304
     expansion_factor: float = 4.
-    act: Callable = nn.gelu
+    act: Callable = gelu
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
