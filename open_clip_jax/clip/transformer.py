@@ -288,7 +288,7 @@ class TextTransformer(nn.Module):
             mlp_bias=self.mlp_bias,
             eps=self.eps,
             dtype=self.dtype,
-            )(output, mask=nn.make_causal_mask(input))
+            )(output, mask=nn.make_causal_mask(input, dtype=input.dtype))
 
         # Unlike ViTs, layer normalization is applied before extracting tokens.
         output = nn.LayerNorm(
