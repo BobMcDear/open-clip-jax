@@ -3,7 +3,7 @@ Transformer model, with support for vision and text.
 """
 
 
-from typing import Callable
+from typing import Callable, Optional
 
 import jax
 from flax import linen as nn
@@ -37,7 +37,7 @@ class TransformerBlock(nn.Module):
     dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, input: Array) -> Array:
+    def __call__(self, input: Array, mask: Optional[Array] = None) -> Array:
         residual = input
         output = nn.LayerNorm(
             epsilon=self.eps,
@@ -47,7 +47,7 @@ class TransformerBlock(nn.Module):
             num_heads=self.n_heads,
             use_bias=self.attention_bias,
             dtype=self.dtype,
-            )(output)
+            )(output, mask=mask)
         output = residual+output
 
         residual = output
@@ -92,7 +92,7 @@ class Transformer(nn.Module):
     dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, input: Array) -> Array:
+    def __call__(self, input: Array, mask: Optional[Array] = None) -> Array:
         for _ in range(self.depth):
             input = TransformerBlock(
                 n_heads=self.n_heads,
@@ -102,7 +102,7 @@ class Transformer(nn.Module):
                 mlp_bias=self.mlp_bias,
                 eps=self.eps,
                 dtype=self.dtype,
-                )(input)
+                )(input, mask=mask)
         return input
 
 
@@ -288,7 +288,7 @@ class TextTransformer(nn.Module):
             mlp_bias=self.mlp_bias,
             eps=self.eps,
             dtype=self.dtype,
-            )(output)
+            )(output, mask=nn.make_causal_mask(input))
 
         # Unlike ViTs, layer normalization is applied before extracting tokens.
         output = nn.LayerNorm(
