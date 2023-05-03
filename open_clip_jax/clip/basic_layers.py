@@ -4,14 +4,25 @@ General-purpose deep learning layers.
 
 
 from typing import Callable, Optional, Union, Tuple
-from functools import partial
 
 from flax import linen as nn
 from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
 
 
-gelu = partial(nn.gelu, approximate=False)
+def gelu(input: Array, approximate: bool = False) -> Array:
+    """
+    Transforms the input using the GELU activation function.
+
+    Args:
+        input: Input to transform using GELU.
+        approximate: Whether to use a tanh-based approximation of GELU. If
+            False, GELU's original formulation is used.
+
+    Returns:
+        Input transformed using GELU.
+    """
+    return nn.gelu(input, approximate=approximate)
 
 
 class MLP(nn.Module):
