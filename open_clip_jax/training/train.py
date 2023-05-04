@@ -25,6 +25,12 @@ PyTree = Any
 class AvgMeter:
     """
     Average meter that keeps track of a series of values and their average.
+
+    Attributes:
+        val: The last registered value.
+        sum: Sum of all registered values.
+        count: Total count of entries registered.
+        avg: Average of registered values.
     """
     def __init__(self) -> None:
         """
