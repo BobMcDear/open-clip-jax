@@ -2,7 +2,16 @@
 Implementation of CLIP and its image/text models in Flax, plus codebase for
 training CLIP models.
 """
-from .clip import CLIP, CLIPWithLoss, create_model, list_models, tokenize
+from .clip import (
+    CLIP,
+    CLIPWithLoss,
+    create_model,
+    create_model_with_params,
+    list_models,
+    list_pretrained,
+    list_pretrained_by_model,
+    tokenize,
+    )
 from .training import (
     IMAGENET_DATASET_MEAN,
     IMAGENET_DATASET_STD,
