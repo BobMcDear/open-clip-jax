@@ -3,7 +3,7 @@ Image transforms not provided by TensorFlow.
 """
 
 
-from typing import Tuple
+from typing import Any, Tuple
 
 import tensorflow as tf
 
@@ -152,3 +152,37 @@ def normalize(
     image -= 255*tf.constant(mean, shape=[1, 1, 3], dtype=image.dtype)
     image /= 255*tf.constant(std, shape=[1, 1, 3], dtype=image.dtype)
     return image
+
+
+class Sequential:
+    """
+    Sequential layer that chains together a series of modules.
+
+    Attributes:
+        modules: Modules that are chained together.
+    """
+    def __init__(self, *modules) -> None:
+        """
+        Stores the modules.
+
+        Args:
+            *modules: Modules that are chained together.
+        """
+        self.modules = [*modules]
+
+    def __repr__(self) -> str:
+        return ' --->\n'.join(map(str, self.modules))
+
+    def __call__(self, input: Any) -> Any:
+        """
+        Sequentially transforms the input by the modules.
+
+        Args:
+            input: Input that is transformed by the modules.
+
+        Returns:
+            Input sequentially transformed by the modules.
+        """
+        for mod in self.modules:
+            input = mod(input)
+        return input
