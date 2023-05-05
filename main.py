@@ -220,9 +220,6 @@ def main(args: Namespace) -> None:
     """
     setup_logging()
 
-    # Hide GPUs from TensorFlow to ensure it doesn't allocate GPU memory
-    tf.config.experimental.set_visible_devices(devices=[], device_type='GPU')
-
     logging.info('Parsed arguments:')
     for arg_name in args.__dict__:
         logging.info(f'{arg_name}: {getattr(args, arg_name)}')

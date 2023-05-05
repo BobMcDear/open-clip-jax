@@ -38,6 +38,14 @@ class AvgMeter:
         """
         self.reset()
 
+    def __repr__(self) -> str:
+        return (
+            f'Last value: {self.val}\n'
+            f'Total sum: {self.sum}\n'
+            f'Total count: {self.count}\n'
+            f'Average: {self.avg}'
+            )
+
     def reset(self) -> None:
         """
         Resets the meter.
@@ -102,7 +110,7 @@ def train_iter(
             axis_name='devices',
             )
         dynamic_scale, is_finite, loss, grads = loss_and_grad_fn(state.params)
-        # Dynamic scale averages gradients across devices automatically
+        # Dynamic scale averages gradients across devices automatically.
     else:
         loss_and_grad_fn = jax.value_and_grad(loss_fn)
         loss, grads = loss_and_grad_fn(state.params)
@@ -197,8 +205,8 @@ def tf_dataset_to_np_iter(
         additional device axis.
     """
     dataset_iter = map(partial(tf_to_np, device_axis=device_axis), dataset)
-    # Pre-fetching data to device speeds up GPU training,
-    # but is not necessary for CPU/TPU.
+    # Pre-fetching data to device speeds up GPU training
+    # but is not necessary for CPUs/TPUs.
     if jax.local_devices()[0].platform == 'gpu':
         dataset_iter = jax_utils.prefetch_to_device(dataset_iter, size=2)
     return dataset_iter

@@ -2,6 +2,13 @@
 Implementation of CLIP and its image/text models in Flax, plus codebase for
 training CLIP models.
 """
+
+
+# Hide GPUs from TensorFlow to ensure it doesn't allocate GPU memory
+import tensorflow as tf
+tf.config.set_visible_devices([], 'GPU')
+
+
 from .clip import (
     CLIP,
     CLIPWithLoss,
