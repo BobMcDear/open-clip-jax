@@ -218,7 +218,7 @@ def create_model_with_params(
     # The OpenAI CLIP tokenizer used to train the pre-trained models has
     # a vocabulary size of 49408.
     model = create_model(model_name, vocab_size=49408, dtype=dtype)
-    vars = jax.jit(model.init)(
+    vars = model.init(
         rngs=jax.random.PRNGKey(0),
         image_input=jnp.empty((1, image_size, image_size, 3), dtype=dtype),
         text_input=jnp.empty((1, context_len), dtype=jnp.int32),
