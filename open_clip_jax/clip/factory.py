@@ -75,8 +75,8 @@ def list_pretrained() -> Tuple[Tuple[str, str], ...]:
         List of available (model, pre-trained parameters) pairs.
     """
     return tuple(
-        (model_name, pretrained) for model_name in PRETRAINED
-        for pretrained in PRETRAINED[model_name]
+        (model_name, pretrained) for model_name, tags in PRETRAINED.items()
+        for pretrained in tags
         )
 
 
