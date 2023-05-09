@@ -96,7 +96,7 @@ def parse_args() -> Namespace:
         '--model-name',
         type=str,
         choices=list_models(),
-        default='vit-base-patch16',
+        default='vit-base-patch32',
         help='Name of CLIP model to train. See open_clip_jax/clip/model_configs/ for available options.',
         )
     parser.add_argument(
