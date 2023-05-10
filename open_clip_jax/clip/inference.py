@@ -5,7 +5,7 @@ Utilities for conducting inference with CLIP models.
 
 import warnings
 from functools import partial
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import jax
 import numpy as np
@@ -69,6 +69,7 @@ class CLIPInference:
     def __init__(
         self,
         model_name: str,
+        softmax_temp: Optional[float] = 100.,
         pretrained: Union[str, bool] = True,
         dtype: Dtype = jnp.float32,
         ) -> None:
@@ -78,6 +79,9 @@ class CLIPInference:
         Args:
             model_name: Name of CLIP model to return. See list_models for available
                 options.
+            softmax_temp: Temperature coefficient the CLIP model's logits are scaled
+                by before calculating softmax and returning, with None for no scaling
+                and softmax.
             pretrained: If False, the model's parameters are randomly initialized.
                 Otherwise, pretrained is interpreted as the name of pre-trained
                 parameters to return, with True for the most performant set of
@@ -90,10 +94,11 @@ class CLIPInference:
 
         self.model, vars = create_model_with_params(
             model_name,
+            softmax_temp=softmax_temp,
             pretrained=pretrained,
             dtype=dtype,
             )
-        self.apply_fn = partial(jax.jit(self.model.apply), vars)
+        self.apply_fn = jax.jit(partial(self.model.apply, vars))
         self.dtype = dtype
 
     def __repr__(self) -> str:
@@ -105,8 +110,8 @@ class CLIPInference:
         text: Union[str, List[str]],
         ) -> Tuple[Array, Array]:
         """
-        Computes the unnormalized CLIP similarity between an input image or a
-        list of images and an input text or a list of texts.
+        Computes the CLIP similarity between an input image or a list of images
+        and an input text or a list of texts.
 
         Args:
             image: Input image or list of images. The image type must be
@@ -114,10 +119,9 @@ class CLIPInference:
             text: Input text or list of texts.
 
         Returns:
-            The unnormalized CLIP similarity between the input image and text,
-            in two formats: A logits-per-image view where entry i, j corresponds
-            to the similarity between the ith image and the jth text, and its
-            transpose.
+            The CLIP similarity between the input image(s) and text(s), in two
+            formats: A per-image view where entry i, j corresponds to the
+            similarity between the ith image and the jth text, and its transpose.
         """
         image_input = preprocess_image(image, self.dtype)
         text_input = tokenize(text)
