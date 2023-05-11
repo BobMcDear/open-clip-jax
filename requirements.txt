@@ -1,8 +1,0 @@
-flax>=0.6.0
-jax>=0.4.1
-keras_nlp>=0.4.1
-optax>=0.1.5
-pandas
-tensorflow>=2.11.0
-tf_models_official>=2.10.0
-transformers>=4.25.0
