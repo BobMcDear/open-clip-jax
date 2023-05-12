@@ -98,7 +98,7 @@ class CLIPInference:
             pretrained=pretrained,
             dtype=dtype,
             )
-        self.apply_fn = jax.jit(partial(self.model.apply, vars))
+        self.apply_fn = partial(jax.jit(self.model.apply), vars)
         self.dtype = dtype
 
     def __repr__(self) -> str:
@@ -124,5 +124,5 @@ class CLIPInference:
             similarity between the ith image and the jth text, and its transpose.
         """
         image_input = preprocess_image(image, self.dtype)
-        text_input = tokenize(text)
+        text_input = tokenize(text)._numpy()
         return self.apply_fn(image_input, text_input)

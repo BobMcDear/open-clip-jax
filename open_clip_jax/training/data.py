@@ -9,8 +9,8 @@ from functools import partial
 import pandas as pd
 import tensorflow as tf
 from tensorflow_models.vision import augment
-from transformers import TFGPT2Tokenizer
 
+from ..clip.tokenizer import tokenize
 from . import image_transforms
 
 
@@ -121,7 +121,7 @@ def map_batch(
         Batch of images normalized, converted to the desired data type, and
         possibly augmented, and the batch of text tokenized.
     """
-    return image_batch_transforms(image, aug, dtype), tokenizer(text)['input_ids']
+    return image_batch_transforms(image, aug, dtype), tokenizer(text)
 
 
 def create_csv_dataset(
@@ -173,11 +173,10 @@ def create_csv_dataset(
         )
 
     aug = augment.AutoAugment(auto_aug_policy).distort if auto_aug_policy else None
-    tokenizer = TFGPT2Tokenizer.from_pretrained('gpt2', max_length=context_len)
     map_item_with_args = partial(map_item, train=train, image_size=image_size)
     map_batch_with_args = partial(
         map_batch,
-        tokenizer=tokenizer,
+        tokenizer=partial(tokenize, context_len=context_len),
         aug=aug,
         dtype=dtype,
         )

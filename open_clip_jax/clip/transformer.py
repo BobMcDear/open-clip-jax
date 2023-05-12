@@ -261,7 +261,7 @@ class TextTransformer(nn.Module):
     depth: int
     embed_dim: int
     n_heads: int
-    vocab_size: int = 50304
+    vocab_size: int = 49408
     expansion_factor: float = 4.
     act: Callable = gelu
     attention_bias: bool = True

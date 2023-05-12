@@ -43,6 +43,12 @@ PRETRAINED = {
 def check_model_exists(model_name: str) -> None:
     """
     Raises a ValueError exception if model of name model_name does not exist.
+
+    Args:
+        model_name: Name of model that is checked.
+
+    Raises:
+        ValueError: Model of name model_name does not exist.
     """
     if model_name not in MODEL_CONFIGS:
         raise ValueError(f'Model {model_name} not recognized. Available models are {list_models()}')
@@ -52,6 +58,12 @@ def check_model_has_pretrained(model_name: str) -> None:
     """
     Raises a ValueError exception if model of name model_name does not have
     pre-trained parameters.
+
+    Args:
+        model_name: Name of model that is checked.
+
+    Raises:
+        ValueError: Model of name model_name does not have pre-trained parameters.
     """
     if model_name not in PRETRAINED:
         raise ValueError(f'{model_name} does not have pre-trained parameters.')
@@ -89,10 +101,6 @@ def list_pretrained_by_model(model_name: str) -> Tuple[str, ...]:
 
     Returns:
         List of the pre-trained parameters for model_name.
-
-    Raises:
-        ValueError: Model of name model_name does not have pre-trained
-            parameters.
     """
     check_model_exists(model_name)
     check_model_has_pretrained(model_name)
@@ -101,7 +109,6 @@ def list_pretrained_by_model(model_name: str) -> Tuple[str, ...]:
 
 def create_model(
     model_name: str,
-    vocab_size: int = 50304,
     softmax_temp: Optional[float] = None,
     dtype: Dtype = jnp.float32,
     ) -> CLIP:
@@ -111,7 +118,6 @@ def create_model(
     Args:
         model_name: Name of CLIP model to return. See list_models for available
             options.
-        vocab_size: Size of vocabulary of the text model.
         softmax_temp: Temperature coefficient the CLIP model's logits are scaled
             by before calculating softmax and returning, with None for no scaling
             and softmax.
@@ -119,20 +125,13 @@ def create_model(
 
     Returns:
         CLIP model.
-
-    Raises:
-        ValueError: Model of name model_name was not found.
     """
     check_model_exists(model_name)
 
     if model_name.startswith('vit'):
         configs = MODEL_CONFIGS[model_name]
         image_model = VisionTransformer(**configs['image_model'], dtype=dtype)
-        text_model = TextTransformer(
-            **configs['text_model'],
-            vocab_size=vocab_size,
-            dtype=dtype,
-            )
+        text_model = TextTransformer(**configs['text_model'], dtype=dtype)
         proj_dim = configs['proj_dim']
 
     model = CLIP(
@@ -224,11 +223,8 @@ def create_model_with_params(
     if pretrained is not False:
         pretrained_params = download_pretrained_params(model_name, pretrained)
 
-    # The OpenAI CLIP tokenizer used to train the pre-trained models has
-    # a vocabulary size of 49408.
     model = create_model(
         model_name=model_name,
-        vocab_size=49408,
         softmax_temp=softmax_temp,
         dtype=dtype,
         )
