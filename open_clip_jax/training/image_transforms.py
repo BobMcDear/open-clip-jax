@@ -5,9 +5,13 @@ Image transforms not provided by TensorFlow.
 
 from typing import Any, Tuple
 
+import jax
 import tensorflow as tf
 
 from .constants import OPENAI_DATASET_MEAN, OPENAI_DATASET_STD
+
+
+PyTree = Any
 
 
 def shape(image: tf.Tensor) -> Tuple[int, int]:
@@ -152,6 +156,30 @@ def normalize(
     image -= 255*tf.constant(mean, shape=[1, 1, 3], dtype=image.dtype)
     image /= 255*tf.constant(std, shape=[1, 1, 3], dtype=image.dtype)
     return image
+
+
+def tf_to_np(pytree: PyTree, device_axis: bool = True) -> PyTree:
+    """
+    Converts TensorFlow tensors into NumPy arrays.
+
+    Args:
+        pytree: PyTree with TensorFlow tensors as leaves.
+        device_axis: Whether to add a leading device axis to the data for
+            distributed training.
+
+    Returns:
+        Input PyTree with its leaves converted into NumPy arrays and
+        potentially an additional device axis.
+    """
+    device_count = jax.local_device_count()
+    def _tf_to_jax(leaf):
+        leaf = leaf._numpy()
+        if device_axis:
+            # [global_batch_size, ...] to [device_count, local_batch_size, ...]
+            leaf = leaf.reshape((device_count, -1) + leaf.shape[1:])
+        return leaf
+
+    return jax.tree_util.tree_map(_tf_to_jax, pytree)
 
 
 class Sequential:

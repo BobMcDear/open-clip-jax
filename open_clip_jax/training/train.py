@@ -5,7 +5,7 @@ Core code for training CLIP models.
 
 import logging
 import pickle
-from typing import Any, Iterable, Tuple
+from typing import Iterable, Tuple
 from functools import partial
 
 import jax
@@ -18,8 +18,7 @@ from flax.training.dynamic_scale import DynamicScale
 from jax import lax
 from jax import numpy as jnp
 
-
-PyTree = Any
+from .image_transforms import tf_to_np
 
 
 class AvgMeter:
@@ -162,30 +161,6 @@ def valid_iter(
         }
     loss = state.apply_fn(vars, image_input, text_input)
     return lax.pmean(loss, axis_name='devices')
-
-
-def tf_to_np(pytree: PyTree, device_axis: bool = True) -> PyTree:
-    """
-    Converts TensorFlow tensors into NumPy arrays.
-
-    Args:
-        pytree: PyTree with TensorFlow tensors as leaves.
-        device_axis: Whether to add a leading device axis to the data for
-            distributed training.
-
-    Returns:
-        Input PyTree with its leaves converted into NumPy arrays and
-        potentially an additional device axis.
-    """
-    device_count = jax.local_device_count()
-    def _tf_to_jax(leaf):
-        leaf = leaf._numpy()
-        if device_axis:
-            # [global_batch_size, ...] to [device_count, local_batch_size, ...]
-            leaf = leaf.reshape((device_count, -1) + leaf.shape[1:])
-        return leaf
-
-    return jax.tree_util.tree_map(_tf_to_jax, pytree)
 
 
 def tf_dataset_to_np_iter(
