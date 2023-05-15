@@ -12,7 +12,6 @@ import tensorflow as tf
 import jax
 from flax.training.dynamic_scale import DynamicScale
 from jax import numpy as jnp
-from tensorflow_models.vision import augment
 
 
 from open_clip_jax.clip import CLIPWithLoss, create_model, list_models
@@ -61,16 +60,6 @@ def parse_args() -> Namespace:
         type=int,
         default=224,
         help='Size to which the images are resized.',
-        )
-    parser.add_argument(
-        '--auto-aug-policy',
-        type=str,
-        choices=augment.AutoAugment().available_policies,
-        default=None,
-        help=(
-            'Name of AutoAugment policy applied to the images during training, with None for no AutoAugment. '
-            'See tfm.vision.augment.AutoAugment for available options.'
-            ),
         )
     parser.add_argument(
         '--context-len',
@@ -238,7 +227,6 @@ def main(args: Namespace) -> None:
     train_dataset = create_csv_dataset_with_args(
         path_csv=args.train_path_csv,
         train=True,
-        auto_aug_policy=args.auto_aug_policy,
         shuffle_buffer_size=args.shuffle_buffer_size,
         )
     valid_dataset = create_csv_dataset_with_args(
@@ -275,7 +263,7 @@ def main(args: Namespace) -> None:
         mask=create_weight_decay_mask,
         )
 
-    logging.info(f'Beginning training on device(s) {jax.local_devices()}')
+    logging.info(f'Beginning training on device(s) {jax.local_devices()}...')
     state = TrainState.create(
         apply_fn=model_with_loss.apply,
         params=vars['params'],

@@ -8,7 +8,6 @@ from functools import partial
 
 import pandas as pd
 import tensorflow as tf
-from tensorflow_models.vision import augment
 
 from ..clip import image_transforms
 from ..clip.tokenizer import tokenize
@@ -130,7 +129,6 @@ def create_csv_dataset(
     col_ind_image: int = 0,
     col_ind_text: int = 1,
     image_size: int = 224,
-    auto_aug_policy: Optional[str] = None,
     context_len: int = 77,
     n_epochs: int = 32,
     global_batch_size: int = 64,
@@ -150,9 +148,6 @@ def create_csv_dataset(
         col_ind_text: Index of the column in the CSV file containing text
             captions.
         image_size: Size to which the images are resized.
-        auto_aug_policy: Name of AutoAugment policy applied to the images, with
-            None for no AutoAugment. See tfm.vision.augment.AutoAugment for
-            available options.
         context_len: Context length of the tokenized text. Tokens are padded or
             truncated to ensure the number of tokens is context_len.
         n_epochs: Number of epochs the model will train for.
@@ -172,12 +167,10 @@ def create_csv_dataset(
         select_cols=[col_ind_image, col_ind_text],
         )
 
-    aug = augment.AutoAugment(auto_aug_policy).distort if auto_aug_policy else None
     map_item_with_args = partial(map_item, train=train, image_size=image_size)
     map_batch_with_args = partial(
         map_batch,
         tokenizer=partial(tokenize, context_len=context_len),
-        aug=aug,
         dtype=dtype,
         )
 
