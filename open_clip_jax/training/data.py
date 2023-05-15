@@ -10,8 +10,8 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow_models.vision import augment
 
+from ..clip import image_transforms
 from ..clip.tokenizer import tokenize
-from . import image_transforms
 
 
 def image_item_transforms(

@@ -13,7 +13,7 @@ import tensorflow as tf
 from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
 
-from ..training import image_transforms
+from . import image_transforms
 from ..training.train import tf_to_np
 from .factory import create_model_with_params
 from .tokenizer import tokenize

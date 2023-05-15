@@ -3,6 +3,15 @@ Implementation of CLIP and its image/text models in Flax.
 """
 
 
+from . import image_transforms
+from .constants import (
+    IMAGENET_DATASET_MEAN,
+    IMAGENET_DATASET_STD,
+    INCEPTION_DATASET_MEAN,
+    INCEPTION_DATASET_STD,
+    OPENAI_DATASET_MEAN,
+    OPENAI_DATASET_STD,
+    )
 from .factory import (
     create_model,
     create_model_with_params,

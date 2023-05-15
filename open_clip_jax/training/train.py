@@ -18,7 +18,7 @@ from flax.training.dynamic_scale import DynamicScale
 from jax import lax
 from jax import numpy as jnp
 
-from .image_transforms import tf_to_np
+from ..clip.image_transforms import tf_to_np
 
 
 class AvgMeter:
