@@ -158,7 +158,7 @@ def create_csv_dataset(
 
     Returns:
         Dataset of (image, text) pairs and an n_iters_per_epoch attribute
-        denoting thenumber of iterations per epoch.
+        denoting the number of iterations per epoch.
     """
     dataset = tf.data.experimental.CsvDataset(
         path_csv,
@@ -166,6 +166,14 @@ def create_csv_dataset(
         header=True,
         select_cols=[col_ind_image, col_ind_text],
         )
+
+    # These specific values are used by most Google projects,
+    # e.g., Big Vision and Scenic, and generally speed up data loading.
+    # Faster alternatives may exist depending on the hardware though.
+    options = tf.data.Options()
+    options.threading.max_intra_op_parallelism = 1
+    options.threading.private_threadpool_size = 48
+    dataset = dataset.with_options(options)
 
     map_item_with_args = partial(map_item, train=train, image_size=image_size)
     map_batch_with_args = partial(
@@ -177,6 +185,7 @@ def create_csv_dataset(
     if train:
         shuffle_buffer_size = shuffle_buffer_size or 16*global_batch_size
         dataset = dataset.shuffle(shuffle_buffer_size)
+
     dataset = (dataset
         .repeat(n_epochs)
         .map(map_item_with_args, tf.data.AUTOTUNE)
