@@ -213,6 +213,12 @@ def main(args: Namespace) -> None:
     for arg_name in args.__dict__:
         logging.info(f'{arg_name}: {getattr(args, arg_name)}')
 
+    if args.global_batch_size % jax.device_count() != 0:
+        raise ValueError(
+            f'Global batch size ({args.global_batch_size}) must be divisible '
+            f'by number of devices ({jax.device_count()}).'
+            )
+
     logging.info('Creating datasets...')
     create_csv_dataset_with_args = partial(
         create_csv_dataset,
@@ -263,7 +269,7 @@ def main(args: Namespace) -> None:
         mask=create_weight_decay_mask,
         )
 
-    logging.info(f'Beginning training on device(s) {jax.local_devices()}...')
+    logging.info(f'Beginning training on device(s) {jax.devices()}...')
     state = TrainState.create(
         apply_fn=model_with_loss.apply,
         params=vars['params'],
