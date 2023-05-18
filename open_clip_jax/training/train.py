@@ -4,8 +4,8 @@ Core code for training CLIP models.
 
 
 import logging
-import pickle
-from typing import Iterable, Tuple
+import time
+from typing import Iterable, Optional, Tuple
 from functools import partial
 
 import jax
@@ -13,7 +13,7 @@ import tensorflow as tf
 from flax import jax_utils
 from flax.core import frozen_dict
 from flax.linen.dtypes import Array
-from flax.training import train_state
+from flax.training import checkpoints, train_state
 from flax.training.dynamic_scale import DynamicScale
 from jax import lax
 from jax import numpy as jnp
@@ -76,7 +76,32 @@ class TrainState(train_state.TrainState):
     See base class.
     """
     labels: Array
-    dynamic_scale: DynamicScale
+    dynamic_scale: Optional[DynamicScale] = None
+
+
+def save_checkpoint(
+    checkpoint_dir: str,
+    state: TrainState,
+    epoch: int,
+    ) -> None:
+    """
+    Saves a training state checkpoint.
+
+    Args:
+        checkpoint_dir: Directory in which checkpoints are saved.
+        state: Training state to checkpoint.
+        epoch: Current epoch.
+    """
+    # The leaves have been replicated over all devices,
+    # but only one copy is necessary.
+    state = jax.tree_util.tree_map(lambda leaf: leaf[0], state)
+    checkpoints.save_checkpoint_multiprocess(
+        ckpt_dir=checkpoint_dir,
+        target=jax.device_get(state),
+        step=epoch,
+        prefix='checkpoint_epoch_',
+        keep=5,
+        )
 
 
 @partial(jax.pmap, axis_name='devices')
@@ -110,12 +135,13 @@ def train_iter(
             )
         dynamic_scale, is_finite, loss, grads = loss_and_grad_fn(state.params)
         # Dynamic scale averages gradients across devices automatically.
+
     else:
         loss_and_grad_fn = jax.value_and_grad(loss_fn)
         loss, grads = loss_and_grad_fn(state.params)
         grads = lax.pmean(grads, axis_name='devices')
 
-    # After update, in case of mixed-precision training,
+    # After update, in case of dynamic scaling for float16,
     # parameters with NaN/infinite gradients are restored.
     updated_state = state.apply_gradients(grads=grads)
     if state.dynamic_scale:
@@ -193,7 +219,8 @@ def train_and_validate(
     valid_dataset: tf.data.Dataset,
     n_epochs: int = 32,
     log_freq: int = 100,
-    save_freq: int = 5,
+    checkpoint_freq: int = 5,
+    resume_from_checkpoint: Optional[str] = None,
     ) -> None:
     """
     Trains a CLIP model and validates after each epoch.
@@ -209,15 +236,26 @@ def train_and_validate(
         n_epochs: Number of epochs to train for.
         log_freq: Training and validation information are logged to console
             every log_freq iterations.
-        save_freq: The CLIP model's parameters are saved every save_freq
-            epochs.
+        checkpoint_freq: Checkpoints are saved every checkpoint_freq epochs.
+        resume_from_checkpoint: If not None, the checkpoint at path
+            resume_from_checkpoint is loaded and training resumed.
     """
+    begin_epoch = 1
+    if resume_from_checkpoint:
+        # Checkpoints end in an '_epoch' suffix denoting the checkpoint epoch.
+        begin_epoch = int(resume_from_checkpoint.split('_')[-1])+1
+        state = checkpoints.restore_checkpoint(
+            ckpt_dir=resume_from_checkpoint,
+            target=state,
+            )
+
     state = jax_utils.replicate(state)
     train_dataset_iter = tf_dataset_to_np_iter(train_dataset)
     valid_dataset_iter = tf_dataset_to_np_iter(valid_dataset)
     loss_meter = AvgMeter()
+    checkpoint_dir = time.strftime('checkpoint-%Y-%m-%d-%H-%M', time.gmtime())
 
-    for epoch in range(1, n_epochs+1):
+    for epoch in range(begin_epoch, n_epochs+1):
         logging.info(f'Beginning epoch {epoch}...')
 
         # Train
@@ -261,12 +299,6 @@ def train_and_validate(
                     )
                 logging.info(message)
 
-        # Save
-        if epoch % save_freq == 0 or epoch == n_epochs:
-            logging.info(f'Saving checkpoint for epoch {epoch}')
-            with open(f'clip_epoch_{epoch}.pkl', 'wb') as file:
-                pickle.dump(
-                    obj={'params': state.params['model']},
-                    file=file,
-                    protocol=pickle.HIGHEST_PROTOCOL,
-                    )
+        # Checkpoint
+        if epoch % checkpoint_freq == 0 or epoch == n_epochs:
+            save_checkpoint(checkpoint_dir, state, epoch)

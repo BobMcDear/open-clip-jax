@@ -94,6 +94,16 @@ def parse_args() -> Namespace:
         default=2.6593,
         help='Initial value for a learnable temperature coefficient the logits are scaled by when calculating the loss, with None for no scaling.',
         )
+    parser.add_argument(
+        '--dtype',
+        type=str,
+        choices=['float32', 'float16', 'bfloat16'],
+        default='float32',
+        help=(
+            'The data type training is performed in. '
+            'Note that some operations are conducted in float32 regardless of --dtype (i.e., automatic mixed precision).'
+            ),
+        )
 
     # Learning rate
     parser.add_argument(
@@ -160,28 +170,24 @@ def parse_args() -> Namespace:
         help='Number of epochs to train for.',
         )
     parser.add_argument(
-        '--dtype',
-        type=str,
-        choices=['float32', 'float16', 'bfloat16'],
-        default='float32',
-        help=(
-            'The data type training is performed in. '
-            'Note that some operations are conducted in float32 regardless of --dtype (i.e., automatic mixed precision).'
-            ),
-        )
-
-    # Logging
-    parser.add_argument(
         '--log-freq',
         type=int,
         default=100,
         help='Training and validation information are logged to console every --log-freq iterations.',
         )
+
+    # Checkpointing
     parser.add_argument(
-        '--save-freq',
+        '--checkpoint-freq',
         type=int,
         default=5,
-        help='The parameters of the CLIP model are saved every --save-freq epochs.',
+        help='Checkpoints are saved every --checkpoint-freq epochs.',
+        )
+    parser.add_argument(
+        '--resume-from-checkpoint',
+        type=str,
+        default=None,
+        help='If not None, the checkpoint at path --resume-from-checkpoint is loaded and training resumed.',
         )
 
     args = parser.parse_args()
@@ -219,6 +225,11 @@ def main(args: Namespace) -> None:
             f'by number of devices ({jax.device_count()}).'
             )
 
+    n_dataset_epochs = args.n_epochs
+    if args.resume_from_checkpoint:
+        # Checkpoints end in an '_epoch' suffix denoting the checkpoint epoch.
+        n_dataset_epochs -= int(args.resume_from_checkpoint.split('_')[-1])
+
     logging.info('Creating datasets...')
     create_csv_dataset_with_args = partial(
         create_csv_dataset,
@@ -226,7 +237,7 @@ def main(args: Namespace) -> None:
         col_ind_text=args.col_ind_text,
         image_size=args.image_size,
         context_len=args.context_len,
-        n_epochs=args.n_epochs,
+        n_epochs=n_dataset_epochs,
         global_batch_size=args.global_batch_size,
         dtype=getattr(tf, args.dtype),
         )
@@ -251,7 +262,7 @@ def main(args: Namespace) -> None:
         image_input=jnp.empty((local_batch_size, args.image_size, args.image_size, 3), dtype=dtype),
         text_input=jnp.empty((local_batch_size, args.context_len), dtype=jnp.int32),
         )
-    logging.info(f'Model created: {model}')
+    logging.info(f'Model created: {model_with_loss}')
 
     learning_rate = create_learning_rate_scheduler(
         scheduler_name=args.learning_rate_scheduler,
@@ -283,7 +294,8 @@ def main(args: Namespace) -> None:
         valid_dataset=valid_dataset,
         n_epochs=args.n_epochs,
         log_freq=args.log_freq,
-        save_freq=args.save_freq,
+        checkpoint_freq=args.checkpoint_freq,
+        resume_from_checkpoint=args.resume_from_checkpoint,
         )
     logging.info('Training finished')
 
