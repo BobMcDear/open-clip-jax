@@ -18,5 +18,6 @@ setup(
 		'tensorflow==2.11.1',
 		'tensorflow_text==2.11.0',
 		],
+    include_package_data=True,
 	python_requires='>=3.8',
 	)
