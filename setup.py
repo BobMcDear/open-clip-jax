@@ -8,7 +8,7 @@ setup(
 	author='Borna Ahmadzadeh',
 	author_email='borna.ahz@gmail.com',
 	url='https://github.com/bobmcdear/open-clip-jax',
-	packages=find_packages(include='open_clip_jax'),
+	packages=find_packages(),
 	install_requires=[
         'flax==0.6.1',
 		'huggingface_hub==0.11.1',
