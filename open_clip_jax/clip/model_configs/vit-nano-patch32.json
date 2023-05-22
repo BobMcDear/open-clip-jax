@@ -1,0 +1,14 @@
+{
+	"image_model": {
+		"depth": 8,
+		"embed_dim": 128,
+		"n_heads": 4,
+		"patch_size": 32
+	},
+	"text_model": {
+		"depth": 8,
+		"embed_dim": 128,
+		"n_heads": 4
+	},
+    "proj_dim": 128
+}
