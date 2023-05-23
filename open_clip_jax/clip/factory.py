@@ -69,14 +69,14 @@ def check_model_has_pretrained(model_name: str) -> None:
         raise ValueError(f'{model_name} does not have pre-trained parameters.')
 
 
-def list_models() -> List[str]:
+def list_models() -> Tuple[str]:
     """
     Lists the names of available models.
 
     Returns:
         List of available models.
     """
-    return list(MODEL_CONFIGS)
+    return tuple(MODEL_CONFIGS)
 
 
 def list_pretrained() -> Tuple[Tuple[str, str], ...]:
