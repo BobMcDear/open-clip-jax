@@ -208,12 +208,24 @@ def setup_logging():
     logging.root.setLevel(logging.INFO)
     logging.root.handlers = [handler]
 
+    # Logging occurs only on the main process (index 0).
+    log_info = logging.info
+    def log_info_to_main_process(message: str) -> None:
+        if jax.process_index() == 0:
+            log_info(message)
+    logging.info = log_info_to_main_process
+
 
 def main(args: Namespace) -> None:
     """
     Trains CLIP models. See parse_args for arguments.
     """
     setup_logging()
+
+    logging.info(
+        f'Process: {jax.process_index()}/{jax.local_device_count}\n'
+        f'Local device(s): {jax.local_devices()}\n'
+        )
 
     logging.info('Parsed arguments:')
     for arg_name in args.__dict__:
@@ -280,7 +292,7 @@ def main(args: Namespace) -> None:
         mask=create_weight_decay_mask,
         )
 
-    logging.info(f'Beginning training on device(s) {jax.devices()}...')
+    logging.info('Beginning training...')
     state = TrainState.create(
         apply_fn=model_with_loss.apply,
         params=vars['params'],
