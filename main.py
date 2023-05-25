@@ -210,10 +210,10 @@ def setup_logging():
 
     # Logging occurs only on the main process (index 0).
     log_info = logging.info
-    def log_info_to_main_process(message: str) -> None:
-        if jax.process_index() == 0:
+    def _log_info(message: str, log_to_all_processes: bool = False) -> None:
+        if log_to_all_processes or jax.process_index() == 0:
             log_info(message)
-    logging.info = log_info_to_main_process
+    logging.info = _log_info
 
 
 def main(args: Namespace) -> None:
@@ -223,8 +223,9 @@ def main(args: Namespace) -> None:
     setup_logging()
 
     logging.info(
-        f'Process: {jax.process_index()}/{jax.local_device_count}\n'
-        f'Local device(s): {jax.local_devices()}\n'
+        f'Process: {jax.process_index()+1}/{jax.process_count()} '
+        f'Local device(s): {jax.local_devices()}',
+        log_to_all_processes=True,
         )
 
     logging.info('Parsed arguments:')
