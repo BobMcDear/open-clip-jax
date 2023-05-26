@@ -6,6 +6,7 @@ Data loading with TensorFlow for training CLIP models.
 from typing import Callable, Optional, Tuple
 from functools import partial
 
+import jax
 import pandas as pd
 import tensorflow as tf
 
@@ -136,8 +137,9 @@ def create_csv_dataset(
     dtype: tf.DType = tf.float32,
     ) -> tf.data.Dataset:
     """
-    Creates a TensorFlow dataset of (image, text) pairs given a CSV file of
-    image paths and text captions. See also map_item and map_batch.
+    Creates a TensorFlow dataset of (image, text) pairs, sharded across all
+    processes, given a CSV file of image paths and text captions. See also
+    map_item and map_batch.
 
     Args:
         path_csv: Path to a CSV file containing image paths and text captions.
@@ -151,13 +153,13 @@ def create_csv_dataset(
         context_len: Context length of the tokenized text. Tokens are padded or
             truncated to ensure the number of tokens is context_len.
         n_epochs: Number of epochs the model will train for.
-        global_batch_size: Global batch size across all devices.
+        global_batch_size: Global batch size across all processes and devices.
         shuffle_buffer_size: Buffer size for shuffling when train is True. If
             None, it is set to 16*global_batch_size (general rule of thumb).
         dtype: The data type the images are converted to.
 
     Returns:
-        Dataset of (image, text) pairs and an n_iters_per_epoch attribute
+        Sharded dataset of (image, text) pairs and an n_iters_per_epoch attribute
         denoting the number of iterations per epoch.
     """
     dataset = tf.data.experimental.CsvDataset(
@@ -165,6 +167,10 @@ def create_csv_dataset(
         record_defaults=[tf.string, tf.string],
         header=True,
         select_cols=[col_ind_image, col_ind_text],
+        )
+    dataset = dataset.shard(
+        num_shards=jax.process_count(),
+        index=jax.process_index(),
         )
 
     # These specific values are used by most Google projects,
@@ -186,10 +192,11 @@ def create_csv_dataset(
         shuffle_buffer_size = shuffle_buffer_size or 16*global_batch_size
         dataset = dataset.shuffle(shuffle_buffer_size)
 
+    batch_size_per_process = global_batch_size // jax.process_count()
     dataset = (dataset
         .repeat(n_epochs)
         .map(map_item_with_args, tf.data.AUTOTUNE)
-        .batch(global_batch_size, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE)
+        .batch(batch_size_per_process, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE)
         .map(map_batch_with_args, tf.data.AUTOTUNE)
         .prefetch(tf.data.AUTOTUNE)
         )

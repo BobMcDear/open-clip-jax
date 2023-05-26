@@ -13,7 +13,6 @@ import jax
 from flax.training.dynamic_scale import DynamicScale
 from jax import numpy as jnp
 
-
 from open_clip_jax.clip import CLIPWithLoss, create_model, list_models
 from open_clip_jax.training.data import create_csv_dataset
 from open_clip_jax.training.optimizer import create_weight_decay_mask
@@ -71,7 +70,7 @@ def parse_args() -> Namespace:
         '--global-batch-size',
         type=int,
         default=64,
-        help='Global batch size across all devices.',
+        help='Global batch size across all processes and devices.',
         )
     parser.add_argument(
         '--shuffle-buffer-size',
@@ -269,11 +268,11 @@ def main(args: Namespace) -> None:
     dtype = getattr(jnp, args.dtype)
     model = create_model(model_name=args.model_name, dtype=dtype)
     model_with_loss = CLIPWithLoss(model, temp_init=args.temp_init)
-    local_batch_size = args.global_batch_size // jax.local_device_count()
+    batch_size_per_device = args.global_batch_size // jax.device_count()
     vars = model_with_loss.init(
         rngs=jax.random.PRNGKey(0),
-        image_input=jnp.empty((local_batch_size, args.image_size, args.image_size, 3), dtype=dtype),
-        text_input=jnp.empty((local_batch_size, args.context_len), dtype=jnp.int32),
+        image_input=jnp.empty((batch_size_per_device, args.image_size, args.image_size, 3), dtype=dtype),
+        text_input=jnp.empty((batch_size_per_device, args.context_len), dtype=jnp.int32),
         )
     logging.info(f'Model created: {model_with_loss}')
 
