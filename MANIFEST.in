@@ -1,0 +1,2 @@
+include open_clip_jax/clip/bpe_simple_vocab_16e6.txt.gz
+include open_clip_jax/clip/model_configs/*.json
