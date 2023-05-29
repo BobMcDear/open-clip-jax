@@ -8,7 +8,6 @@ from functools import partial
 from typing import Any, List, Optional, Tuple, Union
 
 import jax
-import numpy as np
 import tensorflow as tf
 from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
@@ -25,7 +24,7 @@ Image = Any
 def preprocess_image(
     image: Union[Image, List[Image]],
     dtype: tf.DType = tf.float32,
-    ) -> np.ndarray:
+    ) -> Array:
     """
     Pre-processes an image or list of images for inference with CLIP models.
 
