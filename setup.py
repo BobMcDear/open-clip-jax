@@ -13,7 +13,6 @@ setup(
         'flax',
 		'huggingface_hub',
 		'optax',
-		'pandas',
 		'tensorflow',
 		'tensorflow_text',
 		],

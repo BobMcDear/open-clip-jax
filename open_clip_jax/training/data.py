@@ -7,7 +7,6 @@ from typing import Callable, Optional, Tuple
 from functools import partial
 
 import jax
-import pandas as pd
 import tensorflow as tf
 
 from ..clip import image_transforms
@@ -200,6 +199,9 @@ def create_csv_dataset(
         .map(map_batch_with_args, tf.data.AUTOTUNE)
         .prefetch(tf.data.AUTOTUNE)
         )
-    dataset.n_iters_per_epoch = len(pd.read_csv(path_csv)) // global_batch_size
+
+    with tf.io.gfile.GFile(path_csv) as file:
+        # Minus one for the header.
+        dataset.n_iters_per_epoch = sum(1 for _ in file) - 1
 
     return dataset
