@@ -202,6 +202,7 @@ def create_csv_dataset(
 
     with tf.io.gfile.GFile(path_csv) as file:
         # Minus one for the header.
-        dataset.n_iters_per_epoch = sum(1 for _ in file) - 1
+        n_samples = sum(1 for _ in file) - 1
+        dataset.n_iters_per_epoch = n_samples // global_batch_size
 
     return dataset
