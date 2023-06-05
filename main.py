@@ -272,7 +272,7 @@ def main(args: Namespace) -> None:
     model = create_model(model_name=args.model_name, dtype=dtype)
     model_with_loss = CLIPWithLoss(model, temp_init=args.temp_init)
     batch_size_per_device = args.global_batch_size // jax.device_count()
-    vars = model_with_loss.init(
+    vars = jax.jit(model_with_loss.init, backend='cpu')(
         rngs=jax.random.PRNGKey(0),
         image_input=jnp.empty((batch_size_per_device, args.image_size, args.image_size, 3), dtype=dtype),
         text_input=jnp.empty((batch_size_per_device, args.context_len), dtype=jnp.int32),
