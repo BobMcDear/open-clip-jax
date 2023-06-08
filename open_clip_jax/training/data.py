@@ -161,12 +161,21 @@ def create_csv_dataset(
         Sharded dataset of (image, text) pairs and an n_iters_per_epoch attribute
         denoting the number of iterations per epoch.
     """
+    with tf.io.gfile.GFile(path_csv) as file:
+        # Minus one for the header.
+        n_samples = sum(1 for _ in file) - 1
+
     dataset = tf.data.experimental.CsvDataset(
         path_csv,
         record_defaults=[tf.string, tf.string],
         header=True,
         select_cols=[col_ind_image, col_ind_text],
         )
+    dataset.n_iters_per_epoch = n_samples // global_batch_size
+
+    # Number of samples is rounded down to the nearest multiple of the batch size
+    # to ensure the number of batches is identical across all processes.
+    dataset = dataset.take(global_batch_size * dataset.n_iters_per_epoch)
     dataset = dataset.shard(
         num_shards=jax.process_count(),
         index=jax.process_index(),
@@ -199,10 +208,5 @@ def create_csv_dataset(
         .map(map_batch_with_args, tf.data.AUTOTUNE)
         .prefetch(tf.data.AUTOTUNE)
         )
-
-    with tf.io.gfile.GFile(path_csv) as file:
-        # Minus one for the header.
-        n_samples = sum(1 for _ in file) - 1
-        dataset.n_iters_per_epoch = n_samples // global_batch_size
 
     return dataset
