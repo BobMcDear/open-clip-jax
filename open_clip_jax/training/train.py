@@ -206,11 +206,9 @@ def tf_dataset_to_np_iter(
         additional device axis.
     """
     dataset_iter = map(partial(tf_to_np, device_axis=device_axis), dataset)
-    # Pre-fetching data to device speeds up GPU training
-    # but is not necessary for CPUs/TPUs.
-    if jax.local_devices()[0].platform == 'gpu':
-        dataset_iter = jax_utils.prefetch_to_device(dataset_iter, size=2)
-    return dataset_iter
+
+    # Data is prefetched to device to speed up training.
+    return jax_utils.prefetch_to_device(dataset_iter, size=2)
 
 
 def train_and_validate(
