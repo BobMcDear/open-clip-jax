@@ -5,16 +5,18 @@ Utilities for conducting inference with CLIP models.
 
 import warnings
 from functools import partial
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import jax
 import tensorflow as tf
+from flax import linen as nn
 from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
 
 from . import image_transforms
 from ..training.train import tf_to_np
 from .factory import create_model_with_params
+from .model import CLIP
 from .tokenizer import tokenize
 
 
@@ -56,13 +58,52 @@ def preprocess_image(
     return preprocessed
 
 
+@partial(jax.jit, static_argnums=(0, 4))
+def apply_fn(
+    model: CLIP,
+    vars: Dict,
+    image_input: Array,
+    text_input: Array,
+    softmax_temp: Optional[float] = 100.,
+    ) -> Tuple[Array, Array]:
+    """
+    Thin wrapper around CLIP's apply function that performs a forward pass and
+    optionally applies softmax.
+
+    Args:
+        model: The CLIP model to perform a forward pass with.
+        vars: The CLIP model's variables.
+        image_input: Input to the image model.
+        text_input: Input to the text model.
+        softmax_temp: Temperature coefficient the logits are scaled by before
+            calculating softmax and returning, with None for no scaling and
+            softmax.
+
+    Returns:
+        The CLIP similarity between the input image(s) and text(s), in two
+        formats: A per-image view where entry i, j corresponds to the
+        similarity between the ith image and the jth text, and a per-text
+        view where entry i, j corresponds to the similarity between the ith
+        text and jth image.
+    """
+    logits_per_image, logits_per_text = model.apply(vars, image_input, text_input)
+
+    if softmax_temp:
+        scaled = softmax_temp * logits_per_image
+        logits_per_image = nn.softmax(scaled)
+        logits_per_text = nn.softmax(scaled.T)
+
+    return logits_per_image, logits_per_text
+
+
 class CLIPInference:
     """
     Convenience class for end-to-end CLIP inference with raw image/text inputs.
 
     Attributes:
         model: The CLIP model.
-        apply_fn: The CLIP model's JITted apply function, with variables fixed.
+        apply_fn: Apply function returning CLIP logits given input images and
+            texts.
         dtype: The data type of the CLIP model.
     """
     def __init__(
@@ -76,7 +117,7 @@ class CLIPInference:
         Creates the CLIP model and initializes its parameters.
 
         Args:
-            model_name: Name of CLIP model to return. See list_models for available
+            model_name: Name of CLIP model. See list_models for available
                 options.
             softmax_temp: Temperature coefficient the CLIP model's logits are scaled
                 by before calculating softmax and returning, with None for no scaling
@@ -93,11 +134,15 @@ class CLIPInference:
 
         self.model, vars = create_model_with_params(
             model_name,
-            softmax_temp=softmax_temp,
             pretrained=pretrained,
             dtype=dtype,
             )
-        self.apply_fn = partial(jax.jit(self.model.apply), vars)
+        self.apply_fn = partial(
+            apply_fn,
+            model=self.model,
+            vars=vars,
+            softmax_temp=softmax_temp,
+            )
         self.dtype = dtype
 
     def __repr__(self) -> str:
@@ -120,8 +165,10 @@ class CLIPInference:
         Returns:
             The CLIP similarity between the input image(s) and text(s), in two
             formats: A per-image view where entry i, j corresponds to the
-            similarity between the ith image and the jth text, and its transpose.
+            similarity between the ith image and the jth text, and a per-text
+            view where entry i, j corresponds to the similarity between the ith
+            text and jth image.
         """
         image_input = preprocess_image(image, self.dtype)
         text_input = tokenize(text)._numpy()
-        return self.apply_fn(image_input, text_input)
+        return self.apply_fn(image_input=image_input, text_input=text_input)

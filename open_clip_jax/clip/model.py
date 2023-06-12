@@ -39,9 +39,6 @@ class CLIP(nn.Module):
             terms.
         norm: Whether to L2-normalize the projected feature vectors prior to
             calculating their dot product.
-        softmax_temp: Temperature coefficient the logits are scaled by before
-            calculating softmax and returning, with None for no scaling and
-            softmax.
         dtype: The data type of the computations.
     """
     image_model: nn.Module
@@ -49,7 +46,6 @@ class CLIP(nn.Module):
     proj_dim: int = 512
     proj_bias: bool = False
     norm: bool = True
-    softmax_temp: Optional[float] = None
     dtype: Dtype = jnp.float32
 
     @nn.compact
@@ -74,10 +70,5 @@ class CLIP(nn.Module):
 
         logits_per_image = image_projection @ text_projection.T
         logits_per_text = logits_per_image.T
-
-        if self.softmax_temp:
-            scaled = self.softmax_temp*logits_per_image
-            logits_per_image = nn.softmax(scaled)
-            logits_per_text = nn.softmax(scaled.T)
 
         return logits_per_image, logits_per_text

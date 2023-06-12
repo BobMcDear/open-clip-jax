@@ -107,20 +107,13 @@ def list_pretrained_by_model(model_name: str) -> Tuple[str, ...]:
     return PRETRAINED[model_name]
 
 
-def create_model(
-    model_name: str,
-    softmax_temp: Optional[float] = None,
-    dtype: Dtype = jnp.float32,
-    ) -> CLIP:
+def create_model(model_name: str, dtype: Dtype = jnp.float32) -> CLIP:
     """
     Creates a CLIP model given its name.
 
     Args:
         model_name: Name of CLIP model to return. See list_models for available
             options.
-        softmax_temp: Temperature coefficient the CLIP model's logits are scaled
-            by before calculating softmax and returning, with None for no scaling
-            and softmax.
         dtype: The data type of the CLIP model.
 
     Returns:
@@ -134,14 +127,12 @@ def create_model(
         text_model = TextTransformer(**configs['text_model'], dtype=dtype)
         proj_dim = configs['proj_dim']
 
-    model = CLIP(
+    return CLIP(
         image_model=image_model,
         text_model=text_model,
         proj_dim=proj_dim,
-        softmax_temp=softmax_temp,
         dtype=dtype,
         )
-    return model
 
 
 def download_pretrained_params(
@@ -193,7 +184,6 @@ def create_model_with_params(
     model_name: str,
     image_size: int = 224,
     context_len: int = 77,
-    softmax_temp: Optional[float] = None,
     pretrained: Union[str, bool] = True,
     dtype: Dtype = jnp.float32,
     ) -> Tuple[CLIP, Dict]:
@@ -207,9 +197,6 @@ def create_model_with_params(
             no effects on the returned parameters if pretrained is not False.
         context_len: Context length of the text model. This argument has no
             effects on the returned parameters if pretrained is not False.
-        softmax_temp: Temperature coefficient the CLIP model's logits are scaled
-            by before calculating softmax and returning, with None for no scaling
-            and softmax.
         pretrained: If False, the model's parameters are randomly initialized.
             Otherwise, pretrained is interpreted as the name of pre-trained
             parameters to return, with True for the most performant set of
@@ -223,11 +210,7 @@ def create_model_with_params(
     if pretrained is not False:
         pretrained_params = download_pretrained_params(model_name, pretrained)
 
-    model = create_model(
-        model_name=model_name,
-        softmax_temp=softmax_temp,
-        dtype=dtype,
-        )
+    model = create_model(model_name=model_name, dtype=dtype)
     vars = model.init(
         rngs=jax.random.PRNGKey(0),
         image_input=jnp.empty((1, image_size, image_size, 3), dtype=dtype),
