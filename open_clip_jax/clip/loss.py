@@ -21,7 +21,7 @@ class CLIPLoss(nn.Module):
         temp_init: Initial value for a learnable temperature coefficient the logits
             are scaled by, with None for no scaling.
     """
-    temp_init: Optional[float] = 1.155
+    temp_init: Optional[float] = 2.6593
 
     @nn.compact
     def __call__(self, logits_per_image: Array, logits_per_text: Array) -> Array:
