@@ -101,23 +101,36 @@ def list_pretrained_by_model(model_name: str) -> Tuple[str, ...]:
 
     Returns:
         List of the pre-trained parameters for model_name.
+
+    Raises:
+        ValueError: Model of name model_name does not exist or does not have
+            pre-trained parameters.
     """
     check_model_exists(model_name)
     check_model_has_pretrained(model_name)
     return PRETRAINED[model_name]
 
 
-def create_model(model_name: str, dtype: Dtype = jnp.float32) -> CLIP:
+def create_model(
+    model_name: str,
+    temp_init: Optional[float] = 2.6593,
+    dtype: Dtype = jnp.float32,
+    ) -> CLIP:
     """
     Creates a CLIP model given its name.
 
     Args:
         model_name: Name of CLIP model to return. See list_models for available
             options.
+        temp_init: Initial value for a learnable temperature coefficient CLIP's
+            projected image vectors are scaled by, with None for no scaling.
         dtype: The data type of the CLIP model.
 
     Returns:
         CLIP model.
+
+    Raises:
+        ValueError: Model of name model_name does not exist.
     """
     check_model_exists(model_name)
 
@@ -131,6 +144,7 @@ def create_model(model_name: str, dtype: Dtype = jnp.float32) -> CLIP:
         image_model=image_model,
         text_model=text_model,
         proj_dim=proj_dim,
+        temp_init=temp_init,
         dtype=dtype,
         )
 
@@ -182,6 +196,7 @@ def download_pretrained_params(
 
 def create_model_with_params(
     model_name: str,
+    temp_init: Optional[float] = 2.6593,
     image_size: int = 224,
     context_len: int = 77,
     pretrained: Union[str, bool] = True,
@@ -193,6 +208,8 @@ def create_model_with_params(
     Args:
         model_name: Name of CLIP model to return. See list_models for available
             options.
+        temp_init: Initial value for a learnable temperature coefficient CLIP's
+            projected image vectors are scaled by, with None for no scaling.
         image_size: Image size the image model should expect. This argument has
             no effects on the returned parameters if pretrained is not False.
         context_len: Context length of the text model. This argument has no
@@ -210,7 +227,7 @@ def create_model_with_params(
     if pretrained is not False:
         pretrained_params = download_pretrained_params(model_name, pretrained)
 
-    model = create_model(model_name=model_name, dtype=dtype)
+    model = create_model(model_name, temp_init=temp_init, dtype=dtype)
     vars = model.init(
         rngs=jax.random.PRNGKey(0),
         image_input=jnp.empty((1, image_size, image_size, 3), dtype=dtype),

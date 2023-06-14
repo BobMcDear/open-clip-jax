@@ -5,7 +5,7 @@ Core code for training CLIP models.
 
 import logging
 import time
-from typing import Iterable, Optional, Tuple
+from typing import Any, Iterable, Optional, Tuple
 from functools import partial
 
 import jax
@@ -18,7 +18,11 @@ from flax.training.dynamic_scale import DynamicScale
 from jax import lax
 from jax import numpy as jnp
 
+from ..clip.loss import clip_loss, generate_labels
 from ..clip.image_transforms import tf_to_np
+
+
+PyTree = Any
 
 
 class AvgMeter:
@@ -54,28 +58,27 @@ class AvgMeter:
         self.count = 0
         self.avg = 0.
 
-    def update(self, val: Array, count: int) -> None:
+    def update(self, val: Array, count: Optional[int] = None) -> None:
         """
         Updates the tracker.
 
         Args:
             val: Value to add to the tracker.
-            count: Count of entries val accounts for.
+            count: Count of entries val accounts for. If None, it is set to 1.
         """
+        count = count or 1
         self.val = val
-        self.sum += count*val
+        self.sum += count * val
         self.count += count
-        self.avg = self.sum/self.count
+        self.avg = self.sum / self.count
 
 
 class TrainState(train_state.TrainState):
     """
-    Flax training state for CLIP models with support for CLIP loss labels and
-    dynamic loss scaling.
+    Flax training state for CLIP models with support for dynamic loss scaling.
 
     See base class.
     """
-    labels: Array
     dynamic_scale: Optional[DynamicScale] = None
 
 
@@ -109,24 +112,30 @@ def train_iter(
     state: TrainState,
     image_input: Array,
     text_input: Array,
+    labels: Array,
     ) -> Tuple[TrainState, Array]:
     """
     Performs one training iteration.
 
     Args:
-        state: Training state whose apply function returns the CLIP loss.
+        state: Training state whose apply function returns projected image and
+            text vectors.
         image_input: Input to the image model.
         text_input: Input to the text model.
+        labels: Labels used to calculate the cross-entropy loss of the similarity
+            logits.
 
     Returns:
         Updated training state and loss.
     """
-    def loss_fn(params):
-        vars = {
-            'params': params,
-            'labels': state.labels,
-            }
-        return state.apply_fn(vars, image_input, text_input)
+    def loss_fn(vars):
+        image_proj, text_proj = state.apply_fn(vars, image_input, text_input)
+        return clip_loss(
+            image_proj,
+            text_proj,
+            labels=labels,
+            device_axis_name='devices',
+            )
 
     if state.dynamic_scale:
         loss_and_grad_fn = state.dynamic_scale.value_and_grad(
@@ -169,23 +178,29 @@ def valid_iter(
     state: TrainState,
     image_input: Array,
     text_input: Array,
+    labels: Array,
     ) -> Array:
     """
     Performs one validation iteration.
 
     Args:
-        state: Training state whose apply function returns the CLIP loss.
+        state: Training state whose apply function returns projected image and
+            text vectors.
         image_input: Input to the image model.
         text_input: Input to the text model.
+        labels: Labels used to calculate the cross-entropy loss of the similarity
+            logits.
 
     Returns:
         Loss.
     """
-    vars = {
-        'params': state.params,
-        'labels': state.labels,
-        }
-    loss = state.apply_fn(vars, image_input, text_input)
+    image_proj, text_proj = state.apply_fn(state.params, image_input, text_input)
+    loss = clip_loss(
+        image_proj,
+        text_proj,
+        labels=labels,
+        device_axis_name='devices',
+        )
     return lax.pmean(loss, axis_name='devices')
 
 
@@ -205,9 +220,8 @@ def tf_dataset_to_np_iter(
         Iterator yielding NumPy arrays from dataset, potentially with an
         additional device axis.
     """
-    dataset_iter = map(partial(tf_to_np, device_axis=device_axis), dataset)
-
     # Data is prefetched to device to speed up training.
+    dataset_iter = map(partial(tf_to_np, device_axis=device_axis), dataset)
     return jax_utils.prefetch_to_device(dataset_iter, size=2)
 
 
@@ -224,7 +238,8 @@ def train_and_validate(
     Trains a CLIP model and validates after each epoch.
 
     Args:
-        state: Training state whose apply function returns the CLIP loss.
+        state: Training state whose apply function returns projected image and
+            text vectors.
         train_dataset: Dataset returning (image, text) pairs for training and
             an n_iters_per_epoch attribute denoting the number of iterations
             per epoch.
@@ -241,7 +256,7 @@ def train_and_validate(
     begin_epoch = 1
     if resume_from_checkpoint:
         # Checkpoints end in an '_epoch' suffix denoting the checkpoint epoch.
-        begin_epoch = int(resume_from_checkpoint.split('_')[-1])+1
+        begin_epoch = int(resume_from_checkpoint.split('_')[-1]) + 1
         state = checkpoints.restore_checkpoint(
             ckpt_dir=resume_from_checkpoint,
             target=state,
@@ -250,27 +265,29 @@ def train_and_validate(
     state = jax_utils.replicate(state)
     train_dataset_iter = tf_dataset_to_np_iter(train_dataset)
     valid_dataset_iter = tf_dataset_to_np_iter(valid_dataset)
+    labels = generate_labels(train_dataset.element_spec[0].shape[0])
+
     loss_meter = AvgMeter()
     checkpoint_dir = time.strftime('checkpoint-%Y-%m-%d-%H-%M', time.gmtime())
 
-    for epoch in range(begin_epoch, n_epochs+1):
+    for epoch in range(begin_epoch, n_epochs + 1):
         logging.info(f'Beginning epoch {epoch}...')
 
         # Train
         loss_meter.reset()
-        for iter_ind in range(1, train_dataset.n_iters_per_epoch+1):
+        for iter_ind in range(1, train_dataset.n_iters_per_epoch + 1):
             image_input, text_input = next(train_dataset_iter)
-            state, loss = train_iter(state, image_input, text_input)
-            loss_meter.update(loss[0], len(image_input))
+            state, loss = train_iter(state, image_input, text_input, labels)
+            loss_meter.update(loss[0])
 
             # Temperature coefficient is clipped to [0, ln(100)].
-            params = state.params.unfreeze()
-            params['CLIPLoss_0']['temp'] = jnp.clip(
-                a=params['CLIPLoss_0']['temp'],
+            vars = state.params.unfreeze()
+            vars['params']['temp'] = jnp.clip(
+                a=vars['params']['temp'],
                 a_min=0.0,
                 a_max=4.6052,
                 )
-            state = state.replace(params=frozen_dict.freeze(params))
+            state = state.replace(params=frozen_dict.freeze(vars))
 
             if iter_ind % log_freq == 0 or iter_ind == train_dataset.n_iters_per_epoch:
                 message = (
@@ -283,9 +300,9 @@ def train_and_validate(
 
         # Validate
         loss_meter.reset()
-        for iter_ind in range(1, valid_dataset.n_iters_per_epoch+1):
+        for iter_ind in range(1, valid_dataset.n_iters_per_epoch + 1):
             image_input, text_input = next(valid_dataset_iter)
-            loss = valid_iter(state, image_input, text_input)
+            loss = valid_iter(state, image_input, text_input, labels)
             loss_meter.update(loss[0], len(image_input))
 
             if iter_ind % log_freq == 0 or iter_ind == valid_dataset.n_iters_per_epoch:

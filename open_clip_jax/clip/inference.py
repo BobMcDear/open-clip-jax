@@ -59,7 +59,7 @@ def preprocess_image(
 
 
 @partial(jax.jit, static_argnums=(0, 4))
-def apply_fn(
+def calculate_similarity(
     model: CLIP,
     vars: Dict,
     image_input: Array,
@@ -67,11 +67,10 @@ def apply_fn(
     softmax_temp: Optional[float] = 100.,
     ) -> Tuple[Array, Array]:
     """
-    Thin wrapper around CLIP's apply function that performs a forward pass and
-    optionally applies softmax.
+    Calculates CLIP similarities of images and texts.
 
     Args:
-        model: The CLIP model to perform a forward pass with.
+        model: CLIP model returning projected image and text vectors.
         vars: The CLIP model's variables.
         image_input: Input to the image model.
         text_input: Input to the text model.
@@ -80,13 +79,15 @@ def apply_fn(
             softmax.
 
     Returns:
-        The CLIP similarity between the input image(s) and text(s), in two
+        The CLIP similarities between the input image(s) and text(s), in two
         formats: A per-image view where entry i, j corresponds to the
         similarity between the ith image and the jth text, and a per-text
         view where entry i, j corresponds to the similarity between the ith
         text and jth image.
     """
-    logits_per_image, logits_per_text = model.apply(vars, image_input, text_input)
+    image_proj, text_proj = model.apply(vars, image_input, text_input)
+    logits_per_image = image_proj @ text_proj.T
+    logits_per_text = logits_per_image.T
 
     if softmax_temp:
         scaled = softmax_temp * logits_per_image
@@ -102,8 +103,8 @@ class CLIPInference:
 
     Attributes:
         model: The CLIP model.
-        apply_fn: Apply function returning CLIP logits given input images and
-            texts.
+        calculate_similarity: Function returning CLIP similarities given
+            pre-processed input images and tokenized texts.
         dtype: The data type of the CLIP model.
     """
     def __init__(
@@ -134,11 +135,12 @@ class CLIPInference:
 
         self.model, vars = create_model_with_params(
             model_name,
+            temp_init=None,
             pretrained=pretrained,
             dtype=dtype,
             )
-        self.apply_fn = partial(
-            apply_fn,
+        self.calculate_similarity = partial(
+            calculate_similarity,
             model=self.model,
             vars=vars,
             softmax_temp=softmax_temp,
@@ -154,7 +156,7 @@ class CLIPInference:
         text: Union[str, List[str]],
         ) -> Tuple[Array, Array]:
         """
-        Computes the CLIP similarity between an input image or a list of images
+        Computes CLIP similarities between an input image or a list of images
         and an input text or a list of texts.
 
         Args:
@@ -171,4 +173,4 @@ class CLIPInference:
         """
         image_input = preprocess_image(image, self.dtype)
         text_input = tokenize(text)._numpy()
-        return self.apply_fn(image_input=image_input, text_input=text_input)
+        return self.calculate_similarity(image_input=image_input, text_input=text_input)

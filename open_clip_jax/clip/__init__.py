@@ -11,6 +11,5 @@ from .factory import (
     list_pretrained_by_model,
     )
 from .inference import CLIPInference, preprocess_image
-from .loss import CLIPWithLoss
 from .model import CLIP
 from .tokenizer import tokenize

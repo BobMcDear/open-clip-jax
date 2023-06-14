@@ -171,18 +171,18 @@ def create_csv_dataset(
         header=True,
         select_cols=[col_ind_image, col_ind_text],
         )
-    dataset.n_iters_per_epoch = n_samples // global_batch_size
 
     # Number of samples is rounded down to the nearest multiple of the batch size
     # to ensure the number of batches is identical across all processes.
-    dataset = dataset.take(global_batch_size * dataset.n_iters_per_epoch)
+    n_iters_per_epoch = n_samples // global_batch_size
+    dataset = dataset.take(global_batch_size * n_iters_per_epoch)
     dataset = dataset.shard(
         num_shards=jax.process_count(),
         index=jax.process_index(),
         )
 
     # These specific values are used by most Google projects,
-    # e.g., Big Vision and Scenic, and generally speed up data loading.
+    # e.g., Big Vision and Scenic, and generally accelerate data loading.
     # Faster alternatives may exist depending on the hardware though.
     options = tf.data.Options()
     options.threading.max_intra_op_parallelism = 1
@@ -197,7 +197,7 @@ def create_csv_dataset(
         )
 
     if train:
-        shuffle_buffer_size = shuffle_buffer_size or 16*global_batch_size
+        shuffle_buffer_size = shuffle_buffer_size or 16 * global_batch_size
         dataset = dataset.shuffle(shuffle_buffer_size)
 
     batch_size_per_process = global_batch_size // jax.process_count()
@@ -208,5 +208,6 @@ def create_csv_dataset(
         .map(map_batch_with_args, tf.data.AUTOTUNE)
         .prefetch(tf.data.AUTOTUNE)
         )
+    dataset.n_iters_per_epoch = n_samples // global_batch_size
 
     return dataset

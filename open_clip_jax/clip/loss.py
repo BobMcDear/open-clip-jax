@@ -3,62 +3,95 @@ CLIP (contrastive) loss.
 """
 
 
-from typing import Optional
+from typing import Any, Hashable, Optional
 
-from flax import linen as nn
+import jax
 from flax.linen.dtypes import Array
 from jax import numpy as jnp
 from optax import softmax_cross_entropy_with_integer_labels
 
-from .model import CLIP
+
+PyTree = Any
 
 
-class CLIPLoss(nn.Module):
+def all_gather(pytree: PyTree, device_axis_name: Hashable = 'devices') -> PyTree:
     """
-    CLIP (contrastive) loss. Does not support variable batch sizes.
+    All-gathers the leaves of a PyTree (assumed to be batches) and concatenates
+    them along the batch axis. Copied from https://github.com/google-research/big_vision.
 
-    Attributes:
-        temp_init: Initial value for a learnable temperature coefficient the logits
-            are scaled by, with None for no scaling.
+    Args:
+        pytree: PyTree to all-gather.
+        device_axis_name: Name of the device axis.
+
+    Returns:
+        PyTree with its leaves all-gathered and concatenated along the batch axis.
     """
-    temp_init: Optional[float] = 2.6593
+    return jax.tree_util.tree_map(
+        lambda leaf: jnp.concatenate(jax.lax.all_gather(leaf, axis_name=device_axis_name)),
+        pytree,
+        )
 
-    @nn.compact
-    def __call__(self, logits_per_image: Array, logits_per_text: Array) -> Array:
-        if self.temp_init:
-            temp =  self.param(
-                name='temp',
-                init_fn=lambda _: jnp.array(self.temp_init, dtype=logits_per_image.dtype),
-                )
-            logits_per_image = jnp.exp(temp)*logits_per_image
-            logits_per_text = jnp.exp(temp)*logits_per_text
 
-        labels = self.variable(
-            col='labels',
-            name='labels',
-            init_fn=lambda: jnp.arange(0, len(logits_per_image)),
-            ).value
-        return jnp.mean(
+def generate_labels(batch_size_per_process: int) -> Array:
+    """
+    Generates labels that can be used to calculate the cross-entropy loss of the
+    similarity logits. This function assumes the loss is being computed
+    local-to-globally and adds an offset to the labels accordingly.
+
+    Args:
+        batch_size_per_process: Batch size per process.
+
+    Returns:
+        Labels for calculating the cross-entropy loss of the similarity logits,
+        sharded over local devices.
+    """
+    local_devices = jax.local_devices()
+    n_local_devices = len(local_devices)
+
+    offset = jax.process_index() * batch_size_per_process
+    labels = jnp.arange(batch_size_per_process) + offset
+    labels = jnp.reshape(labels, (n_local_devices, -1))
+
+    # Labels are sharded so they don't have to be transferred to the appropriate
+    # device each time in pmaps.
+    shards = [labels[device_ind] for device_ind in range(n_local_devices)]
+    sharded = jax.device_put_sharded(shards, devices=local_devices)
+    return sharded
+
+
+def clip_loss(
+    image_proj: Array,
+    text_proj: Array,
+    labels: Array,
+    device_axis_name: Optional[Hashable] = None,
+    ) -> Array:
+    """
+    Calculates the CLIP (contrastive) loss given projected image and text vectors.
+
+    Args:
+        image_proj: Projected image vectors.
+        text_proj: Projected text vectors.
+        labels: Labels used to calculate the cross-entropy loss of the similarity
+            logits.
+        device_axis_name: If None, the similarity logits are calculated locally
+            and depend only on image_proj and text_proj. Otherwise, image_proj
+            and text_proj are all-gathered, assuming device_axis_name is the
+            name of a pmapped axis, and local-to-global similarity logits are
+            computed.
+
+    Returns:
+        The CLIP (contrastive) loss of the similarity logits.
+    """
+    if device_axis_name is None:
+        logits_per_image = image_proj @ text_proj.T
+        logits_per_text = logits_per_image.T
+
+    else:
+        all_image_proj, all_text_proj = all_gather((image_proj, text_proj))
+        logits_per_image = image_proj @ all_text_proj.T
+        logits_per_text = text_proj @ all_image_proj.T
+
+    return jnp.mean(
             softmax_cross_entropy_with_integer_labels(logits_per_image, labels) +
             softmax_cross_entropy_with_integer_labels(logits_per_text, labels)
             ) / 2
-
-
-class CLIPWithLoss(nn.Module):
-    """
-    CLIP model and loss refactored into a class returning loss given inputs.
-    Does not support variable batch sizes.
-
-    Attributes:
-        model: CLIP model.
-        temp_init: Initial value for a learnable temperature coefficient the logits
-            are scaled by when calculating the loss, with None for no scaling.
-    """
-    model: CLIP
-    temp_init: Optional[float] = 2.6593
-
-    @nn.compact
-    def __call__(self, image_input: Array, text_input: Array) -> Array:
-        logits_per_image, logits_per_text = self.model(image_input, text_input)
-        loss_fn = CLIPLoss(self.temp_init)
-        return loss_fn(logits_per_image, logits_per_text)

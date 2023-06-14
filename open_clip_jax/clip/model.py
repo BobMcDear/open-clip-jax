@@ -29,7 +29,8 @@ def l2_norm(input: Array) -> Array:
 
 class CLIP(nn.Module):
     """
-    CLIP model that calculates similarity of image and text inputs.
+    CLIP model that extracts feature vectors from image and text data and
+    projects them to a multimodal embedding space.
 
     Attributes:
         image_model: Model used to extract feature vectors from image data.
@@ -37,8 +38,9 @@ class CLIP(nn.Module):
         proj_dim: Dimension to which the image and text features are projected.
         proj_bias: Whether the linear projection layers should contain bias
             terms.
-        norm: Whether to L2-normalize the projected feature vectors prior to
-            calculating their dot product.
+        norm: Whether to L2-normalize the projected vectors.
+        temp_init: Initial value for a learnable temperature coefficient the
+            projected image vectors are scaled by, with None for no scaling.
         dtype: The data type of the computations.
     """
     image_model: nn.Module
@@ -46,6 +48,7 @@ class CLIP(nn.Module):
     proj_dim: int = 512
     proj_bias: bool = False
     norm: bool = True
+    temp_init: Optional[float] = 2.6593
     dtype: Dtype = jnp.float32
 
     @nn.compact
@@ -53,22 +56,26 @@ class CLIP(nn.Module):
         image_output = self.image_model(image_input)
         text_output = self.text_model(text_input)
 
-        image_projection = nn.Dense(
+        image_proj = nn.Dense(
             features=self.proj_dim,
             use_bias=self.proj_bias,
             dtype=self.dtype,
             )(image_output)
-        text_projection = nn.Dense(
+        text_proj = nn.Dense(
             features=self.proj_dim,
             use_bias=self.proj_bias,
             dtype=self.dtype,
             )(text_output)
 
         if self.norm:
-            image_projection = l2_norm(image_projection)
-            text_projection = l2_norm(text_projection)
+            image_proj = l2_norm(image_proj)
+            text_proj = l2_norm(text_proj)
 
-        logits_per_image = image_projection @ text_projection.T
-        logits_per_text = logits_per_image.T
+        if self.temp_init:
+            temp = self.param(
+                name='temp',
+                init_fn=lambda _: jnp.array(self.temp_init, dtype=image_proj.dtype),
+                )
+            image_proj = jnp.exp(temp) * image_proj
 
-        return logits_per_image, logits_per_text
+        return image_proj, text_proj

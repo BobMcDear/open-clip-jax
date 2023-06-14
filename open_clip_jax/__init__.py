@@ -4,7 +4,7 @@ training CLIP models.
 """
 
 
-# Hide GPUs from TensorFlow to ensure it doesn't allocate GPU memory.
+# Hide GPUs from TensorFlow to ensure it does not allocate GPU memory.
 import tensorflow as tf
 tf.config.set_visible_devices([], 'GPU')
 

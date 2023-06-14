@@ -13,7 +13,7 @@ import jax
 from flax.training.dynamic_scale import DynamicScale
 from jax import numpy as jnp
 
-from open_clip_jax.clip import CLIPWithLoss, create_model, list_models
+from open_clip_jax.clip import create_model, list_models
 from open_clip_jax.training import (
     TrainState,
     create_csv_dataset,
@@ -225,7 +225,7 @@ def main(args: Namespace) -> None:
     setup_logging()
 
     logging.info(
-        f'Process: {jax.process_index()+1}/{jax.process_count()} '
+        f'Process: {jax.process_index() + 1}/{jax.process_count()} '
         f'Local device(s): {jax.local_devices()}',
         log_to_all_processes=True,
         )
@@ -269,15 +269,13 @@ def main(args: Namespace) -> None:
 
     logging.info('Creating model...')
     dtype = getattr(jnp, args.dtype)
-    model = create_model(model_name=args.model_name, dtype=dtype)
-    model_with_loss = CLIPWithLoss(model, temp_init=args.temp_init)
-    batch_size_per_device = args.global_batch_size // jax.device_count()
-    vars = jax.jit(model_with_loss.init, backend='cpu')(
+    model = create_model(args.model_name, temp_init=args.temp_init, dtype=dtype)
+    vars = jax.jit(model.init, backend='cpu')(
         rngs=jax.random.PRNGKey(0),
-        image_input=jnp.empty((batch_size_per_device, args.image_size, args.image_size, 3), dtype=dtype),
-        text_input=jnp.empty((batch_size_per_device, args.context_len), dtype=jnp.int32),
+        image_input=jnp.empty((1, args.image_size, args.image_size, 3), dtype=dtype),
+        text_input=jnp.empty((1, args.context_len), dtype=jnp.int32),
         )
-    logging.info(f'Model created: {model_with_loss}')
+    logging.info(f'Model created: {model}')
 
     learning_rate = create_learning_rate_scheduler(
         scheduler_name=args.learning_rate_scheduler,
@@ -294,15 +292,14 @@ def main(args: Namespace) -> None:
         weight_decay=args.weight_decay,
         mask=create_weight_decay_mask,
         )
-
-    logging.info('Beginning training...')
     state = TrainState.create(
-        apply_fn=model_with_loss.apply,
-        params=vars['params'],
+        apply_fn=model.apply,
+        params=vars,
         tx=optim,
-        labels=vars['labels'],
         dynamic_scale=DynamicScale() if dtype is jnp.float16 else None,
         )
+
+    logging.info('Beginning training...')
     train_and_validate(
         state=state,
         train_dataset=train_dataset,
