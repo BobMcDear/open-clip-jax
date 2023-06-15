@@ -231,6 +231,7 @@ def train_and_validate(
     valid_dataset: tf.data.Dataset,
     n_epochs: int = 32,
     log_freq: int = 100,
+    checkpoint_dir: Optional[str] = None,
     checkpoint_freq: int = 5,
     resume_from_checkpoint: Optional[str] = None,
     ) -> None:
@@ -249,6 +250,8 @@ def train_and_validate(
         n_epochs: Number of epochs to train for.
         log_freq: Training and validation information are logged to console
             every log_freq iterations.
+        checkpoint_dir: Directory to save checkpoints in. If None, they are
+            saved locally in folder 'checkpoint-date/'.
         checkpoint_freq: Checkpoints are saved every checkpoint_freq epochs.
         resume_from_checkpoint: If not None, the checkpoint at path
             resume_from_checkpoint is loaded and training resumed.
@@ -268,7 +271,7 @@ def train_and_validate(
     labels = generate_labels(train_dataset.element_spec[0].shape[0])
 
     loss_meter = AvgMeter()
-    checkpoint_dir = time.strftime('checkpoint-%Y-%m-%d-%H-%M', time.gmtime())
+    checkpoint_dir = checkpoint_dir or time.strftime('checkpoint-%Y-%m-%d-%H-%M', time.gmtime())
 
     for epoch in range(begin_epoch, n_epochs + 1):
         logging.info(f'Beginning epoch {epoch}...')

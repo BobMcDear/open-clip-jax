@@ -180,6 +180,12 @@ def parse_args() -> Namespace:
 
     # Checkpointing
     parser.add_argument(
+        '--checkpoint-dir',
+        type=str,
+        default=None,
+        help='Directory to save checkpoints in. If None, they are saved locally in folder checkpoint-date/.',
+        )
+    parser.add_argument(
         '--checkpoint-freq',
         type=int,
         default=5,
@@ -306,6 +312,7 @@ def main(args: Namespace) -> None:
         valid_dataset=valid_dataset,
         n_epochs=args.n_epochs,
         log_freq=args.log_freq,
+        checkpoint_dir=args.checkpoint_dir,
         checkpoint_freq=args.checkpoint_freq,
         resume_from_checkpoint=args.resume_from_checkpoint,
         )
