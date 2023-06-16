@@ -107,7 +107,7 @@ def save_checkpoint(
         )
 
 
-@partial(jax.pmap, axis_name='devices')
+@partial(jax.pmap, axis_name='devices', donate_argnums=0)
 def train_iter(
     state: TrainState,
     image_input: Array,
