@@ -58,15 +58,14 @@ class AvgMeter:
         self.count = 0
         self.avg = 0.
 
-    def update(self, val: Array, count: Optional[int] = None) -> None:
+    def update(self, val: Array, count: int = 1) -> None:
         """
         Updates the tracker.
 
         Args:
             val: Value to add to the tracker.
-            count: Count of entries val accounts for. If None, it is set to 1.
+            count: Count of entries val accounts for.
         """
-        count = count or 1
         self.val = val
         self.sum += count * val
         self.count += count
@@ -271,6 +270,7 @@ def train_and_validate(
     labels = generate_labels(train_dataset.element_spec[0].shape[0])
 
     loss_meter = AvgMeter()
+    time_meter = AvgMeter()
     checkpoint_dir = checkpoint_dir or time.strftime('checkpoint-%Y-%m-%d-%H-%M', time.gmtime())
 
     for epoch in range(begin_epoch, n_epochs + 1):
@@ -278,7 +278,9 @@ def train_and_validate(
 
         # Train
         loss_meter.reset()
+        time_meter.reset()
         for iter_ind in range(1, train_dataset.n_iters_per_epoch + 1):
+            start_of_iter_time = time.time()
             image_input, text_input = next(train_dataset_iter)
             state, loss = train_iter(state, image_input, text_input, labels)
             loss_meter.update(loss[0])
@@ -292,28 +294,36 @@ def train_and_validate(
                 )
             state = state.replace(params=frozen_dict.freeze(vars))
 
+            time_meter.update(time.time() - start_of_iter_time)
+
             if iter_ind % log_freq == 0 or iter_ind == train_dataset.n_iters_per_epoch:
                 message = (
                     f'Training epoch: {epoch}/{n_epochs} '
                     f'Iteration: {iter_ind}/{train_dataset.n_iters_per_epoch} '
-                    f'Loss (current iteration): {loss_meter.val} '
-                    f'Loss (average of current epoch): {loss_meter.avg}'
+                    f'Loss (current iteration): {loss_meter.val:.3f} '
+                    f'Loss (current epoch): {loss_meter.avg:.3f} '
+                    f'Time per iteration (current epoch): {time_meter.avg:.3f}'
                     )
                 logging.info(message)
 
         # Validate
         loss_meter.reset()
+        time_meter.reset()
         for iter_ind in range(1, valid_dataset.n_iters_per_epoch + 1):
+            start_of_iter_time = time.time()
             image_input, text_input = next(valid_dataset_iter)
             loss = valid_iter(state, image_input, text_input, labels)
             loss_meter.update(loss[0], len(image_input))
+
+            time_meter.update(time.time() - start_of_iter_time)
 
             if iter_ind % log_freq == 0 or iter_ind == valid_dataset.n_iters_per_epoch:
                 message = (
                     f'Validation epoch: {epoch}/{n_epochs} '
                     f'Iteration: {iter_ind}/{valid_dataset.n_iters_per_epoch} '
-                    f'Loss (current iteration): {loss_meter.val} '
-                    f'Loss (average of current epoch): {loss_meter.avg}'
+                    f'Loss (current iteration): {loss_meter.val:.3f} '
+                    f'Loss (current epoch): {loss_meter.avg:.3f} '
+                    f'Time per iteration (current epoch): {time_meter.avg:.3f}'
                     )
                 logging.info(message)
 
