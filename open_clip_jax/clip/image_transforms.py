@@ -14,6 +14,21 @@ from .constants import OPENAI_DATASET_MEAN, OPENAI_DATASET_STD
 PyTree = Any
 
 
+def identity(input: Any, *args, **kwargs) -> Any:
+    """
+    Identity function that returns the input as-is.
+
+    Args:
+        input: Input that is returned as-is.
+        *args: Additional positional arguments (ignored).
+        **kwargs: Additional keyword arguments (ignored).
+
+    Returns:
+        Input as-is.
+    """
+    return input
+
+
 def shape(image: tf.Tensor) -> Tuple[int, int]:
     """
     Gets the height and width of the input image.
