@@ -3,7 +3,7 @@ CLIP model.
 """
 
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from flax import linen as nn
 from flax.linen.dtypes import Array, Dtype
@@ -29,8 +29,7 @@ def l2_norm(input: Array) -> Array:
 
 class CLIP(nn.Module):
     """
-    CLIP model that extracts feature vectors from image and text data and
-    projects them to a multimodal embedding space.
+    CLIP image and text embedding extractor.
 
     Attributes:
         image_model: Model used to extract feature vectors from image data.
@@ -52,7 +51,19 @@ class CLIP(nn.Module):
     dtype: Dtype = jnp.float32
 
     @nn.compact
-    def __call__(self, image_input: Array, text_input: Array) -> Array:
+    def __call__(self, image_input: Array, text_input: Array) -> Tuple[Array, Array]:
+        """
+        Extracts feature vectors from image and text data and projects them to
+        a multimodal embedding space.
+
+        Args:
+            image_input: Input to the image model.
+            text_input: Input to the text model.
+
+        Returns:
+            Projected image and text vectors. The former is scaled by a
+            learnable temperature coefficient if temp_init is not None.
+        """
         image_output = self.image_model(image_input)
         text_output = self.text_model(text_input)
 

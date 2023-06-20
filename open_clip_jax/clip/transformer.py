@@ -38,6 +38,16 @@ class TransformerBlock(nn.Module):
 
     @nn.compact
     def __call__(self, input: Array, mask: Optional[Array] = None) -> Array:
+        """
+        Passes the input through the transformer block.
+
+        Args:
+            input: Input passed through the transformer block.
+            mask: Optional mask for multi-headed self-attention.
+
+        Returns:
+            Output of the transformer block.
+        """
         residual = input
         output = nn.LayerNorm(
             epsilon=self.eps,
@@ -68,7 +78,7 @@ class TransformerBlock(nn.Module):
 
 class Transformer(nn.Module):
     """
-    Transformer model.
+    Transformer.
 
     Attributes:
         depth: Number of transformer block.
@@ -93,6 +103,16 @@ class Transformer(nn.Module):
 
     @nn.compact
     def __call__(self, input: Array, mask: Optional[Array] = None) -> Array:
+        """
+        Passes the input through the transformer.
+
+        Args:
+            input: Input passed through the transformer.
+            mask: Optional mask for multi-headed self-attention.
+
+        Returns:
+            Output of the transformer.
+        """
         for _ in range(self.depth):
             input = TransformerBlock(
                 n_heads=self.n_heads,
@@ -123,6 +143,15 @@ class PatchEmbed(nn.Module):
 
     @nn.compact
     def __call__(self, input: Array) -> Array:
+        """
+        Extracts patch embeddings from the input.
+
+        Args:
+            input: Input to extract patch embeddings from.
+
+        Returns:
+            Flattened patch embeddings.
+        """
         output = nn.Conv(
             features=self.embed_dim,
             kernel_size=(self.patch_size, self.patch_size),
@@ -141,6 +170,15 @@ class ClsToken(nn.Module):
     """
     @nn.compact
     def __call__(self, input: Array) -> Array:
+        """
+        Concatenates a class token to the beginning of the input.
+
+        Args:
+            input: Input to concatenate a class token to.
+
+        Returns:
+            Input with a class token concatenated to it.
+        """
         embed_dim = input.shape[-1]
         cls_token = self.param(
             name='cls_token',
@@ -156,6 +194,15 @@ class PosEmbed(nn.Module):
     """
     @nn.compact
     def __call__(self, input: Array) -> Array:
+        """
+        Adds position embedding vectors to the input.
+
+        Args:
+            input: Input to add position embedding vectors to.
+
+        Returns:
+            Input with position embedding vectors added to it.
+        """
         shape = input.shape[-2:]
         pos_embed = self.param(
             name='pos_embed',
@@ -201,6 +248,15 @@ class VisionTransformer(nn.Module):
 
     @nn.compact
     def __call__(self, input: Array) -> Array:
+        """
+        Passes the input through the vision transformer.
+
+        Args:
+            input: Input passed through the vision transformer.
+
+        Returns:
+            Output of the vision transformer.
+        """
         output = PatchEmbed(
             embed_dim=self.embed_dim,
             patch_size=self.patch_size,
@@ -272,6 +328,15 @@ class TextTransformer(nn.Module):
 
     @nn.compact
     def __call__(self, input: Array) -> Array:
+        """
+        Passes the input through the text transformer.
+
+        Args:
+            input: Input passed through the text transformer.
+
+        Returns:
+            Output of the text transformer.
+        """
         output = nn.Embed(
             num_embeddings=self.vocab_size,
             features=self.embed_dim,

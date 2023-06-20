@@ -45,6 +45,15 @@ class MLP(nn.Module):
 
     @nn.compact
     def __call__(self, input: Array) -> Array:
+        """
+        Passes the input through the MLP.
+
+        Args:
+            input: Input passed through the MLP.
+
+        Returns:
+            Output of the MLP.
+        """
         in_dim = input.shape[-1]
         hidden_dim = int(self.expansion_factor*in_dim)
         out_dim = self.out_dim or in_dim
@@ -79,6 +88,9 @@ class MultiHeadAttention(nn.MultiHeadDotProductAttention):
         mask: Optional[Array] = None,
         deterministic: Optional[bool] = None,
         ) -> Array:
+        """
+        See base class.
+        """
         inputs_kv = inputs_kv or inputs_q
         return super().__call__(inputs_q, inputs_kv, mask, deterministic)
 
@@ -88,7 +100,7 @@ def global_avg_pool(
     axis: Union[int, Tuple[int, ...]] = 1,
     ) -> Array:
     """
-    Global average pooling over arbitrary axis.
+    Global average pools the input over arbitrary axis.
 
     Args:
         input: Input to average pool.
