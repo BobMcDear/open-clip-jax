@@ -169,6 +169,15 @@ def train_iter(
             dynamic_scale=dynamic_scale,
             )
 
+    # Temperature coefficient is clipped to [0, ln(100)].
+    vars = updated_state.params.unfreeze()
+    vars['params']['temp'] = jnp.clip(
+        a=vars['params']['temp'],
+        a_min=0.0,
+        a_max=4.6052,
+        )
+    updated_state = updated_state.replace(params=frozen_dict.freeze(vars))
+
     return updated_state, lax.pmean(loss, axis_name='devices')
 
 
@@ -280,21 +289,11 @@ def train_and_validate(
         loss_meter.reset()
         time_meter.reset()
         for iter_ind in range(1, train_dataset.n_iters_per_epoch + 1):
-            start_of_iter_time = time.time()
+            start = time.time()
             image_input, text_input = next(train_dataset_iter)
             state, loss = train_iter(state, image_input, text_input, labels)
             loss_meter.update(loss[0])
-
-            # Temperature coefficient is clipped to [0, ln(100)].
-            vars = state.params.unfreeze()
-            vars['params']['temp'] = jnp.clip(
-                a=vars['params']['temp'],
-                a_min=0.0,
-                a_max=4.6052,
-                )
-            state = state.replace(params=frozen_dict.freeze(vars))
-
-            time_meter.update(time.time() - start_of_iter_time)
+            time_meter.update(time.time() - start)
 
             if iter_ind % log_freq == 0 or iter_ind == train_dataset.n_iters_per_epoch:
                 message = (
@@ -310,12 +309,11 @@ def train_and_validate(
         loss_meter.reset()
         time_meter.reset()
         for iter_ind in range(1, valid_dataset.n_iters_per_epoch + 1):
-            start_of_iter_time = time.time()
+            start = time.time()
             image_input, text_input = next(valid_dataset_iter)
             loss = valid_iter(state, image_input, text_input, labels)
             loss_meter.update(loss[0], len(image_input))
-
-            time_meter.update(time.time() - start_of_iter_time)
+            time_meter.update(time.time() - start)
 
             if iter_ind % log_freq == 0 or iter_ind == valid_dataset.n_iters_per_epoch:
                 message = (
