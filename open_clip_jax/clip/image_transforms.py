@@ -3,7 +3,8 @@ Image transforms not provided by TensorFlow.
 """
 
 
-from typing import Any, Tuple
+from functools import partial
+from typing import Any, Tuple, Union
 
 import jax
 import tensorflow as tf
@@ -107,10 +108,13 @@ def resize_smallest_edge(
         aspect ratio maintained.
     """
     image_w, image_h = shape(image)
+
     if image_w <= image_h:
         size = (int(size * image_h / image_w), size)
+
     else:
         size = (size, int(size * image_w / image_h))
+
     return tf.image.resize(image, size, method, antialias=antialias)
 
 
@@ -187,11 +191,14 @@ def tf_to_np(pytree: PyTree, device_axis: bool = True) -> PyTree:
         potentially an additional device axis.
     """
     device_count = jax.local_device_count()
+
     def _tf_to_jax(leaf):
         leaf = leaf._numpy()
+
         if device_axis:
             # [global_batch_size, ...] to [device_count, local_batch_size, ...]
             leaf = leaf.reshape((device_count, -1) + leaf.shape[1:])
+
         return leaf
 
     return jax.tree_util.tree_map(_tf_to_jax, pytree)
@@ -229,3 +236,82 @@ class Sequential:
         for mod in self.modules:
             input = mod(input)
         return input
+
+
+def create_image_transforms(
+    train: bool,
+    input_format: str = 'path',
+    do_batch_transforms: bool = True,
+    size: int = 224,
+    dtype: tf.DType = tf.float32,
+    ) -> Union[Sequential, Tuple[Sequential, Sequential]]:
+    """
+    Creates image transforms for training or validation of CLIP models.
+
+    Args:
+        train: Whether to apply training transforms (True) or validation
+            transforms (False).
+        input_format: Format of the input the transforms will receive. Available
+            options are 'path' for paths to images that should be read, 'bytes'
+            for JPEG-encoded bytes, and 'image' for PIL images, decoded NumPy
+            arrays, etc. Format 'image' is not supported for training.
+        do_batch_transforms: Whether to return two separate series of transforms,
+            one to be applied over individual data points and the other over batches
+            for greater efficiency. If False, the two are concatenated and returned
+            as one.
+        size: Size to which the images are resized.
+        dtype: The data type the images are converted to.
+
+    Returns:
+        If do_batch_transforms is True, two Sequential modules are returned,
+        corresponding to item and batch transforms respectively. Otherwise,
+        a single Sequential module is returned containing both item and
+        batch transforms.
+
+    Raises:
+        ValueError: Input format is not recognized or is 'image' for training.
+    """
+    if input_format not in ['path', 'bytes', 'image']:
+        raise ValueError(
+            f'Input format {input_format} not recognized. '
+            'Available options are [path, bytes, image].'
+            )
+
+    if train:
+        # 'image' format is not supported for training because random resized
+        # cropping expects bytes.
+        if input_format == 'image':
+            raise ValueError('Input format images not supported for training.')
+
+        # The only training transform is random resized cropping.
+        item_transforms = [
+            tf.io.read_file if input_format == 'path' else identity,
+            partial(random_resized_crop, size=size),
+            ]
+
+    else:
+        # Validation transforms are resizing the smallest edge and center-cropping.
+        item_transforms = [
+            tf.io.read_file if input_format == 'path' else identity,
+            partial(tf.io.decode_jpeg, channels=3) if input_format != 'image' else identity,
+            partial(resize_smallest_edge, size=size),
+            partial(center_crop_with_padding, size=size),
+            ]
+
+    # Both training and validation inputs are normalized and
+    # converted to the correct data type.
+    batch_transforms = [
+        normalize,
+        partial(tf.image.convert_image_dtype, dtype=dtype)
+        ]
+
+    if do_batch_transforms:
+        transforms = (
+            Sequential(*item_transforms),
+            Sequential(*batch_transforms),
+            )
+
+    else:
+        transforms = Sequential(*item_transforms, *batch_transforms)
+
+    return transforms

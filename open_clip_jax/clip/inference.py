@@ -13,49 +13,13 @@ from flax import linen as nn
 from flax.linen.dtypes import Array, Dtype
 from jax import numpy as jnp
 
-from . import image_transforms
-from ..training.train import tf_to_np
+from .image_transforms import create_image_transforms
 from .factory import create_model_with_params
 from .model import CLIP
 from .tokenizer import tokenize
 
 
 Image = Any
-
-
-def preprocess_image(
-    image: Union[Image, List[Image]],
-    dtype: tf.DType = tf.float32,
-    ) -> Array:
-    """
-    Pre-processes an image or list of images for inference with CLIP models.
-
-    Args:
-        image: Image or list of images to pre-process. The image type must be
-            consumable by TensorFlow, e.g., PIL image or NumPy array.
-        dtype: The data type the image is converted to.
-
-    Returns:
-        Image or list of images pre-processed, with an additional batch axis.
-    """
-    if not isinstance(image, list):
-        image = [image]
-
-    item_transforms = image_transforms.Sequential(
-        image_transforms.resize_smallest_edge,
-        image_transforms.center_crop_with_padding,
-        )
-    preprocessed = list(map(item_transforms, image))
-
-    # Some transforms are applied over batches for greater efficiency.
-    preprocessed = tf.stack(preprocessed, axis=0)
-    preprocessed = image_transforms.Sequential(
-            image_transforms.normalize,
-            partial(tf.image.convert_image_dtype, dtype=dtype),
-            partial(tf_to_np, device_axis=False),
-            )(preprocessed)
-
-    return preprocessed
 
 
 @partial(jax.jit, static_argnums=(0, 4))
@@ -103,9 +67,10 @@ class CLIPInference:
 
     Attributes:
         model: The CLIP model.
+        image_transforms: Transforms applied on input images before being fed
+            to the CLIP model.
         calculate_similarity: Function returning CLIP similarities given
             pre-processed input images and tokenized texts.
-        dtype: The data type of the CLIP model.
     """
     def __init__(
         self,
@@ -115,7 +80,7 @@ class CLIPInference:
         dtype: Dtype = jnp.float32,
         ) -> None:
         """
-        Creates the CLIP model and initializes its parameters.
+        Creates the CLIP model and related modules.
 
         Args:
             model_name: Name of CLIP model. See list_models for available
@@ -139,13 +104,18 @@ class CLIPInference:
             pretrained=pretrained,
             dtype=dtype,
             )
+        self.image_transforms = create_image_transforms(
+            train=False,
+            input_format='image',
+            do_batch_transforms=False,
+            dtype=dtype,
+            )
         self.calculate_similarity = partial(
             calculate_similarity,
             model=self.model,
             vars=vars,
             softmax_temp=softmax_temp,
             )
-        self.dtype = dtype
 
     def __repr__(self) -> str:
         return str(self.model)
@@ -171,6 +141,13 @@ class CLIPInference:
             view where entry i, j corresponds to the similarity between the ith
             text and jth image.
         """
-        image_input = preprocess_image(image, self.dtype)
+        if not isinstance(image, list):
+            image = [image]
+
+        image_input = tf.stack(list(map(self.image_transforms, image)))._numpy()
         text_input = tokenize(text)._numpy()
-        return self.calculate_similarity(image_input=image_input, text_input=text_input)
+
+        return self.calculate_similarity(
+            image_input=image_input,
+            text_input=text_input,
+            )

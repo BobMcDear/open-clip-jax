@@ -12,12 +12,11 @@ tf.config.set_visible_devices([], 'GPU')
 from .clip import (
     CLIP,
     CLIPInference,
+    create_image_transforms,
     create_model,
     create_model_with_params,
-    image_transforms,
     list_models,
     list_pretrained,
     list_pretrained_by_model,
-    preprocess_image,
     tokenize,
     )

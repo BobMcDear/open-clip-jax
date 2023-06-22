@@ -3,124 +3,13 @@ Data loading with TensorFlow for training CLIP models.
 """
 
 
-from typing import Callable, Optional, Tuple
-from functools import partial
+from typing import Optional, Tuple
 
 import jax
 import tensorflow as tf
 
-from ..clip import image_transforms
+from ..clip.image_transforms import create_image_transforms
 from ..clip.tokenizer import tokenize
-
-
-def image_item_transforms(
-    path_image: tf.Tensor,
-    train: bool,
-    size: int = 224,
-    ) -> tf.Tensor:
-    """
-    Image transforms applied over individual samples. The training transform
-    is random resized cropping, and the validation transforms are resizing and
-    center-cropping.
-
-    Args:
-        path_image: Path to image to load and transform.
-        train: Whether to apply training transforms (True) or validation
-            transforms (False).
-        size: Size to which the image is resized.
-
-    Returns:
-        Image at path_image loaded and transformed using the appropriate
-        transforms.
-    """
-    bytes = tf.io.read_file(path_image)
-
-    if train:
-        image = image_transforms.random_resized_crop(bytes, size)
-
-    else:
-        image = tf.io.decode_jpeg(bytes, channels=3)
-        image = image_transforms.resize_smallest_edge(image, size)
-        image = image_transforms.center_crop_with_padding(image, size)
-
-    return image
-
-
-def image_batch_transforms(
-    image: tf.Tensor,
-    aug: Optional[Callable] = None,
-    dtype: tf.DType = tf.float32,
-    ) -> tf.Tensor:
-    """
-    Image transforms applied over batches of samples for greater efficiency.
-    They are optional augmentations, normalization, and data type conversion.
-
-    Args:
-        image: Batch of images to transform.
-        aug: Optional augmentations. If None, no augmentations are applied.
-        dtype: The data type the batch of images is converted to.
-
-    Returns:
-        Batch of images normalized, converted to the desired data type, and
-        possibly augmented.
-    """
-    if aug:
-        image = aug(image)
-    image = image_transforms.normalize(image)
-    image = tf.image.convert_image_dtype(image, dtype)
-    return image
-
-
-@tf.function
-def map_item(
-    path_image: tf.Tensor,
-    text: tf.Tensor,
-    train: bool,
-    image_size: int = 224,
-    ) -> Tuple[tf.Tensor, tf.Tensor]:
-    """
-    Receives the path to an image and a text, loads and transforms the
-    image and returns the text as-is. See also image_item_transforms.
-
-    Args:
-        path_image: Path to image to load and transform.
-        text: Text.
-        train: Whether to apply training transforms (True) or validation
-            transforms (False) to the image.
-        image_size: Size to which the image is resized.
-
-    Returns:
-        Image at path_image loaded and transformed using the appropriate
-        transforms and the text as-is.
-    """
-    return image_item_transforms(path_image, train, image_size), text
-
-
-@tf.function
-def map_batch(
-    image: tf.Tensor,
-    text: tf.Tensor,
-    tokenizer: Callable,
-    aug: Optional[Callable] = None,
-    dtype: tf.DType = tf.float32,
-    ) -> Tuple[tf.Tensor, tf.Tensor]:
-    """
-    Receives a batch of images and text, transforms the images and tokenizes
-    the text. See also image_batch_transforms.
-
-    Args:
-        image: Batch of images to transform.
-        text: Batch of text to tokenize.
-        tokenizer: Tokenizer used to tokenize the batch of text.
-        aug: Optional augmentations applied to the batch of images. If None, no
-            augmentations are applied.
-        dtype: The data type the batch of images is converted to.
-
-    Returns:
-        Batch of images normalized, converted to the desired data type, and
-        possibly augmented, and the batch of text tokenized.
-    """
-    return image_batch_transforms(image, aug, dtype), tokenizer(text)
 
 
 def create_csv_dataset(
@@ -189,12 +78,24 @@ def create_csv_dataset(
     options.threading.private_threadpool_size = 48
     dataset = dataset.with_options(options)
 
-    map_item_with_args = partial(map_item, train=train, image_size=image_size)
-    map_batch_with_args = partial(
-        map_batch,
-        tokenizer=partial(tokenize, context_len=context_len),
+    image_item_transforms, image_batch_transforms = create_image_transforms(
+        train=train,
+        input_format='path',
+        size=image_size,
         dtype=dtype,
         )
+
+    def map_item(
+        path_image: tf.Tensor,
+        text: tf.Tensor,
+        ) -> Tuple[tf.Tensor, tf.Tensor]:
+        return image_item_transforms(path_image), text
+
+    def map_batch(
+        image: tf.Tensor,
+        text: tf.Tensor,
+        ) -> Tuple[tf.Tensor, tf.Tensor]:
+        return image_batch_transforms(image), tokenize(text, context_len)
 
     if train:
         shuffle_buffer_size = shuffle_buffer_size or 16 * global_batch_size
@@ -203,9 +104,9 @@ def create_csv_dataset(
     batch_size_per_process = global_batch_size // jax.process_count()
     dataset = (dataset
         .repeat(n_epochs)
-        .map(map_item_with_args, tf.data.AUTOTUNE)
+        .map(map_item, tf.data.AUTOTUNE)
         .batch(batch_size_per_process, drop_remainder=True, num_parallel_calls=tf.data.AUTOTUNE)
-        .map(map_batch_with_args, tf.data.AUTOTUNE)
+        .map(map_batch, tf.data.AUTOTUNE)
         .prefetch(tf.data.AUTOTUNE)
         )
     dataset.n_iters_per_epoch = n_samples // global_batch_size
