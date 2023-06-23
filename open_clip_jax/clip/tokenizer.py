@@ -361,7 +361,7 @@ class BytePairTokenizer:
         )
         return merged_words
 
-    def __call__(self, inputs):
+    def __call__(self, inputs, context_len=77):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
@@ -420,16 +420,16 @@ class BytePairTokenizer:
              axis=1,
             )
 
-        # Convert to a dense output if `sequence_length` is set.
-        if self.sequence_length:
+        # Convert to a dense output if context_len is set.
+        if context_len:
             output_shape = tokens.shape.as_list()
-            output_shape[-1] = self.sequence_length
+            output_shape[-1] = context_len
             tokens = tokens.to_tensor(shape=output_shape)
 
         # Convert to a dense output if input in scalar
         if scalar_input:
             tokens = tf.squeeze(tokens, 0)
-            tf.ensure_shape(tokens, shape=[self.sequence_length])
+            tf.ensure_shape(tokens, shape=[context_len])
 
         # MOD: If a single data point is passed, a batch axis is added.
         if tf.rank(tokens) == 1:
@@ -456,23 +456,4 @@ class BytePairTokenizer:
         self.cache.insert(tokens, tokenized_words)
 
 
-_tokenizer = BytePairTokenizer()
-
-
-def tokenize(
-    input: Union[tf.Tensor, Union[str, List[str]]],
-    context_len: int = 77,
-    ) -> tf.Tensor:
-    """
-    Tokenizes the input using byte-pair encoding.
-
-    Args:
-        input: Input to tokenize.
-        context_len: Context length of the tokenized text. Tokens are padded or
-            truncated to ensure the number of tokens is context_len.
-
-    Returns:
-        The tokenized text.
-    """
-    _tokenizer.sequence_length = context_len
-    return _tokenizer(input)
+tokenize = BytePairTokenizer()
