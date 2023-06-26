@@ -23,7 +23,6 @@ since CLIP's tokenizer is different than that of GPT-2.
 
 import gzip
 import os
-from typing import List, Union
 
 import tensorflow as tf
 import tensorflow_text as tf_text
