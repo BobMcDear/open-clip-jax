@@ -3,6 +3,9 @@ Common normalization mean and standard deviations.
 """
 
 
+IDENTITY_MEAN = (0., 0., 0.)
+IDENTITY_STD = (1., 1., 1.)
+
 IMAGENET_DATASET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DATASET_STD = (0.229, 0.224, 0.225)
 
