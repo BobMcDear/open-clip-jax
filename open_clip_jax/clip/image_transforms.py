@@ -177,6 +177,27 @@ def normalize(
     return image
 
 
+def denormalize(
+    image: tf.Tensor,
+    mean: Tuple[float, ...] = OPENAI_DATASET_MEAN,
+    std: Tuple[float, ...] = OPENAI_DATASET_STD,
+    ) -> tf.Tensor:
+    """
+    De-normalizes the normalized input image at the last axis.
+
+    Args:
+        image: Normalized image to de-normalizes.
+        mean: Mean per channel image was normalized by.
+        std: Standard deviation per channel image was normalized by.
+
+    Returns:
+        Input image de-normalized at the last axis.
+    """
+    image *= tf.constant(std, shape=[1, 1, 3], dtype=image.dtype)
+    image += tf.constant(mean, shape=[1, 1, 3], dtype=image.dtype)
+    return image
+
+
 def tf_to_np(pytree: PyTree, device_axis: bool = True) -> PyTree:
     """
     Converts TensorFlow tensors into NumPy arrays.
