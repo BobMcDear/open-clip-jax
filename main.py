@@ -16,7 +16,7 @@ from jax import numpy as jnp
 from open_clip_jax.clip import create_model, list_models
 from open_clip_jax.training import (
     TrainState,
-    create_csv_dataset,
+    create_dataset,
     create_learning_rate_scheduler,
     create_weight_decay_mask,
     train_and_validate,
@@ -34,28 +34,56 @@ def parse_args() -> Namespace:
 
     # Data loading
     parser.add_argument(
-        '--train-path-csv',
+        '--train-path',
         type=str,
         required=True,
-        help='Path to a CSV file containing image paths and text captions for training.',
+        help=(
+            'Path to a CSV file containing image paths and text captions or '
+            'path to a directory of TFRecords, for training.'
+            ),
         )
     parser.add_argument(
-        '--valid-path-csv',
+        '--valid-path',
         type=str,
         required=True,
-        help='Path to a CSV file containing image paths and text captions for validation.',
+        help=(
+            'Path to a CSV file containing image paths and text captions or '
+            'path to a directory of TFRecords, for validation.'
+            ),
         )
     parser.add_argument(
-        '--col-ind-image',
+        '--train-n-samples',
         type=int,
-        default=0,
-        help='Index of the column in the CSV file containing image paths.',
+        default=None,
+        help=(
+            'If --train-path points to a CSV file, --train-n-samples controls '
+            'how many samples are used during training, with None denoting the entire CSV file. '
+            'Otherwise, --train-n-samples should be the number of examples in all the '
+            'training TFRecords combined and must be provided.'
+            ),
         )
     parser.add_argument(
-        '--col-ind-text',
+        '--valid-n-samples',
         type=int,
-        default=1,
-        help='Index of the column in the CSV file containing text captions.',
+        default=None,
+        help=(
+            'If --valid-path points to a CSV file, --valid-n-samples controls '
+            'how many samples are used during validation, with None denoting the entire CSV file. '
+            'Otherwise, --valid-n-samples should be the number of examples in all the '
+            'validation TFRecords combined and must be provided.'
+            ),
+        )
+    parser.add_argument(
+        '--image-key',
+        type=str,
+        default='jpg',
+        help='Name of CSV column or TFRecord key containing image paths or bytes.',
+        )
+    parser.add_argument(
+        '--text-key',
+        type=str,
+        default='caption',
+        help='Name of CSV column or TFRecord key containing text captions.',
         )
     parser.add_argument(
         '--image-size',
@@ -252,24 +280,25 @@ def main(args: Namespace) -> None:
         n_dataset_epochs -= int(args.resume_from_checkpoint.split('_')[-1])
 
     logging.info('Creating datasets...')
-    create_csv_dataset_with_args = partial(
-        create_csv_dataset,
-        col_ind_image=args.col_ind_image,
-        col_ind_text=args.col_ind_text,
+    create_dataset_with_args = partial(
+        create_dataset,
+        image_key=args.image_key,
+        text_key=args.text_key,
         image_size=args.image_size,
         context_len=args.context_len,
-        n_epochs=n_dataset_epochs,
         global_batch_size=args.global_batch_size,
         dtype=getattr(tf, args.dtype),
         )
-    train_dataset = create_csv_dataset_with_args(
-        path_csv=args.train_path_csv,
+    train_dataset = create_dataset_with_args(
+        path=args.train_path,
         train=True,
+        n_samples=args.train_n_samples,
         shuffle_buffer_size=args.shuffle_buffer_size,
         )
-    valid_dataset = create_csv_dataset_with_args(
-        path_csv=args.valid_path_csv,
+    valid_dataset = create_dataset_with_args(
+        path=args.valid_path,
         train=False,
+        n_samples=args.valid_n_samples,
         )
     logging.info('Datasets created')
 
