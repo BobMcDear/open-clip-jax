@@ -262,9 +262,16 @@ def main(args: Namespace) -> None:
 
     Raises:
         ValueError: Neither --train-path nor --valid-path is provided.
+        ValueError: Global batch size is not divisible by the number of devices.
     """
     if (args.train_path or args.valid_path) is None:
         raise ValueError('At least one of --train-path or --valid-path needs to be provided.')
+
+    if args.global_batch_size % jax.device_count() != 0:
+        raise ValueError(
+            f'Global batch size ({args.global_batch_size}) must be divisible '
+            f'by number of devices ({jax.device_count()}).'
+            )
 
     setup_logging()
 
@@ -277,12 +284,6 @@ def main(args: Namespace) -> None:
     logging.info('Parsed arguments:')
     for arg_name in args.__dict__:
         logging.info(f'{arg_name}: {getattr(args, arg_name)}')
-
-    if args.global_batch_size % jax.device_count() != 0:
-        raise ValueError(
-            f'Global batch size ({args.global_batch_size}) must be divisible '
-            f'by number of devices ({jax.device_count()}).'
-            )
 
     n_dataset_epochs = args.n_epochs
     if args.resume_from_checkpoint:
