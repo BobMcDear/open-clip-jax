@@ -235,8 +235,8 @@ def tf_dataset_to_np_iter(
 
 def train_and_validate(
     state: TrainState,
-    train_dataset: tf.data.Dataset,
-    valid_dataset: tf.data.Dataset,
+    train_dataset: Optional[tf.data.Dataset],
+    valid_dataset: Optional[tf.data.Dataset],
     n_epochs: int = 32,
     log_freq: int = 100,
     checkpoint_dir: Optional[str] = None,
@@ -251,10 +251,12 @@ def train_and_validate(
             text vectors.
         train_dataset: Dataset returning (image, text) pairs for training and
             an n_iters_per_epoch attribute denoting the number of iterations
-            per epoch.
+            per epoch. If None, no training and checkpointing are performed.
+            At least one of train_dataset or valid_datasets needs to be provided.
         valid_dataset: Dataset returning (image, text) pairs for validation and
             an n_iters_per_epoch attribute denoting the number of iterations
-            per epoch.
+            per epoch. If None, no validation is performed. At least one of
+            train_dataset or valid_datasets needs to be provided.
         n_epochs: Number of epochs to train for.
         log_freq: Training and validation information are logged to console
             every log_freq iterations.
@@ -263,7 +265,13 @@ def train_and_validate(
         checkpoint_freq: Checkpoints are saved every checkpoint_freq epochs.
         resume_from_checkpoint: If not None, the checkpoint at path
             resume_from_checkpoint is loaded and training resumed.
+
+    Raises:
+        ValueError: Neither train_dataset nor valid_dataset is provided.
     """
+    if (train_dataset or valid_dataset) is None:
+        raise ValueError('At least one of train_dataset or valid_dataset needs to be provided.')
+
     begin_epoch = 1
     if resume_from_checkpoint:
         # Checkpoints end in an '_epoch' suffix denoting the checkpoint epoch.
@@ -274,9 +282,11 @@ def train_and_validate(
             )
 
     state = jax_utils.replicate(state)
-    train_dataset_iter = tf_dataset_to_np_iter(train_dataset)
-    valid_dataset_iter = tf_dataset_to_np_iter(valid_dataset)
-    labels = generate_labels(train_dataset.element_spec[0].shape[0])
+    train_dataset_iter = tf_dataset_to_np_iter(train_dataset) if train_dataset else None
+    valid_dataset_iter = tf_dataset_to_np_iter(valid_dataset) if valid_dataset else None
+
+    batch = getattr(train_dataset or valid_dataset, 'element_spec')
+    labels = generate_labels(batch[0].shape[0])
 
     loss_meter = AvgMeter()
     time_meter = AvgMeter()
@@ -286,45 +296,49 @@ def train_and_validate(
         logging.info(f'Beginning epoch {epoch}...')
 
         # Train
-        loss_meter.reset()
-        time_meter.reset()
-        for iter_ind in range(1, train_dataset.n_iters_per_epoch + 1):
-            start = time.time()
-            image_input, text_input = next(train_dataset_iter)
-            state, loss = train_iter(state, image_input, text_input, labels)
-            loss_meter.update(loss[0])
-            time_meter.update(time.time() - start)
+        if train_dataset_iter:
+            loss_meter.reset()
+            time_meter.reset()
 
-            if iter_ind % log_freq == 0 or iter_ind == train_dataset.n_iters_per_epoch:
-                message = (
-                    f'Training epoch: {epoch}/{n_epochs} '
-                    f'Iteration: {iter_ind}/{train_dataset.n_iters_per_epoch} '
-                    f'Loss (current iteration): {loss_meter.val:.3f} '
-                    f'Loss (current epoch): {loss_meter.avg:.3f} '
-                    f'Time per iteration (current epoch): {time_meter.avg:.3f}'
-                    )
-                logging.info(message)
+            for iter_ind in range(1, train_dataset.n_iters_per_epoch + 1):
+                start = time.time()
+                image_input, text_input = next(train_dataset_iter)
+                state, loss = train_iter(state, image_input, text_input, labels)
+                loss_meter.update(loss[0])
+                time_meter.update(time.time() - start)
+
+                if iter_ind % log_freq == 0 or iter_ind == train_dataset.n_iters_per_epoch:
+                    message = (
+                        f'Training epoch: {epoch}/{n_epochs} '
+                        f'Iteration: {iter_ind}/{train_dataset.n_iters_per_epoch} '
+                        f'Loss (current iteration): {loss_meter.val:.3f} '
+                        f'Loss (current epoch): {loss_meter.avg:.3f} '
+                        f'Time per iteration (current epoch): {time_meter.avg:.3f}'
+                        )
+                    logging.info(message)
 
         # Validate
-        loss_meter.reset()
-        time_meter.reset()
-        for iter_ind in range(1, valid_dataset.n_iters_per_epoch + 1):
-            start = time.time()
-            image_input, text_input = next(valid_dataset_iter)
-            loss = valid_iter(state, image_input, text_input, labels)
-            loss_meter.update(loss[0], len(image_input))
-            time_meter.update(time.time() - start)
+        if valid_dataset_iter:
+            loss_meter.reset()
+            time_meter.reset()
 
-            if iter_ind % log_freq == 0 or iter_ind == valid_dataset.n_iters_per_epoch:
-                message = (
-                    f'Validation epoch: {epoch}/{n_epochs} '
-                    f'Iteration: {iter_ind}/{valid_dataset.n_iters_per_epoch} '
-                    f'Loss (current iteration): {loss_meter.val:.3f} '
-                    f'Loss (current epoch): {loss_meter.avg:.3f} '
-                    f'Time per iteration (current epoch): {time_meter.avg:.3f}'
-                    )
-                logging.info(message)
+            for iter_ind in range(1, valid_dataset.n_iters_per_epoch + 1):
+                start = time.time()
+                image_input, text_input = next(valid_dataset_iter)
+                loss = valid_iter(state, image_input, text_input, labels)
+                loss_meter.update(loss[0], len(image_input))
+                time_meter.update(time.time() - start)
+
+                if iter_ind % log_freq == 0 or iter_ind == valid_dataset.n_iters_per_epoch:
+                    message = (
+                        f'Validation epoch: {epoch}/{n_epochs} '
+                        f'Iteration: {iter_ind}/{valid_dataset.n_iters_per_epoch} '
+                        f'Loss (current iteration): {loss_meter.val:.3f} '
+                        f'Loss (current epoch): {loss_meter.avg:.3f} '
+                        f'Time per iteration (current epoch): {time_meter.avg:.3f}'
+                        )
+                    logging.info(message)
 
         # Checkpoint
-        if epoch % checkpoint_freq == 0 or epoch == n_epochs:
+        if train_dataset_iter and (epoch % checkpoint_freq == 0 or epoch == n_epochs):
             save_checkpoint(checkpoint_dir, state, epoch)

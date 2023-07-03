@@ -36,19 +36,23 @@ def parse_args() -> Namespace:
     parser.add_argument(
         '--train-path',
         type=str,
-        required=True,
+        default=None,
         help=(
             'Path to a CSV file containing image paths and text captions or '
-            'path to a directory of TFRecords, for training.'
+            'path to a directory of TFRecords, for training. '
+            'If None, no training and checkpointing are performed. '
+            'At least one of --train-path or --valid-path needs to be provided.'
             ),
         )
     parser.add_argument(
         '--valid-path',
         type=str,
-        required=True,
+        default=None,
         help=(
             'Path to a CSV file containing image paths and text captions or '
-            'path to a directory of TFRecords, for validation.'
+            'path to a directory of TFRecords, for validation. '
+            'If None, no validation is performed.'
+            'At least one of --train-path or --valid-path needs to be provided.'
             ),
         )
     parser.add_argument(
@@ -58,8 +62,8 @@ def parse_args() -> Namespace:
         help=(
             'If --train-path points to a CSV file, --train-n-samples controls '
             'how many samples are used during training, with None denoting the entire CSV file. '
-            'Otherwise, --train-n-samples should be the number of examples in all the '
-            'training TFRecords combined and must be provided.'
+            'If --train-path points to a TFRecord directory, --train-n-samples should be the '
+            'number of examples in all the training TFRecords combined and must be provided.'
             ),
         )
     parser.add_argument(
@@ -69,8 +73,8 @@ def parse_args() -> Namespace:
         help=(
             'If --valid-path points to a CSV file, --valid-n-samples controls '
             'how many samples are used during validation, with None denoting the entire CSV file. '
-            'Otherwise, --valid-n-samples should be the number of examples in all the '
-            'validation TFRecords combined and must be provided.'
+            'If --valid-path points to a TFRecord directory, --valid-n-samples should be the '
+            'number of examples in all the validation TFRecords combined and must be provided.'
             ),
         )
     parser.add_argument(
@@ -255,7 +259,13 @@ def setup_logging():
 def main(args: Namespace) -> None:
     """
     Trains CLIP models. See parse_args for arguments.
+
+    Raises:
+        ValueError: Neither --train-path nor --valid-path is provided.
     """
+    if (args.train_path or args.valid_path) is None:
+        raise ValueError('At least one of --train-path or --valid-path needs to be provided.')
+
     setup_logging()
 
     logging.info(
@@ -279,7 +289,8 @@ def main(args: Namespace) -> None:
         # Checkpoints end in an '_epoch' suffix denoting the checkpoint epoch.
         n_dataset_epochs -= int(args.resume_from_checkpoint.split('_')[-1])
 
-    logging.info('Creating datasets...')
+    train_dataset = None
+    valid_dataset = None
     create_dataset_with_args = partial(
         create_dataset,
         image_key=args.image_key,
@@ -289,18 +300,27 @@ def main(args: Namespace) -> None:
         global_batch_size=args.global_batch_size,
         dtype=getattr(tf, args.dtype),
         )
-    train_dataset = create_dataset_with_args(
-        path=args.train_path,
-        train=True,
-        n_samples=args.train_n_samples,
-        shuffle_buffer_size=args.shuffle_buffer_size,
-        )
-    valid_dataset = create_dataset_with_args(
-        path=args.valid_path,
-        train=False,
-        n_samples=args.valid_n_samples,
-        )
-    logging.info('Datasets created')
+
+    if args.train_path:
+        logging.info('Creating training dataset...')
+        train_dataset = create_dataset_with_args(
+            path=args.train_path,
+            train=True,
+            n_samples=args.train_n_samples,
+            shuffle_buffer_size=args.shuffle_buffer_size,
+            )
+        next(iter(train_dataset)) # Test one batch
+        logging.info('Training dataset created')
+
+    if args.valid_path:
+        logging.info('Creating validation dataset...')
+        valid_dataset = create_dataset_with_args(
+            path=args.valid_path,
+            train=False,
+            n_samples=args.valid_n_samples,
+            )
+        next(iter(valid_dataset)) # Test one batch
+        logging.info('Validation dataset created')
 
     logging.info('Creating model...')
     dtype = getattr(jnp, args.dtype)
@@ -312,13 +332,14 @@ def main(args: Namespace) -> None:
         )
     logging.info(f'Model created: {model}')
 
+    # The learning rate and optimizer are redundant when args.train_path is None.
     learning_rate = create_learning_rate_scheduler(
         scheduler_name=args.learning_rate_scheduler,
         learning_rate=args.learning_rate,
-        n_train_iters=args.n_epochs*train_dataset.n_iters_per_epoch,
+        n_train_iters=args.n_epochs * train_dataset.n_iters_per_epoch,
         n_warmup_steps=args.n_warmup_steps,
         warmup_init=args.warmup_init,
-        )
+        ) if args.train_path else 0
     optim = optax.adamw(
         learning_rate=learning_rate,
         b1=args.beta1,
