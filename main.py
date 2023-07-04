@@ -285,11 +285,6 @@ def main(args: Namespace) -> None:
     for arg_name in args.__dict__:
         logging.info(f'{arg_name}: {getattr(args, arg_name)}')
 
-    n_dataset_epochs = args.n_epochs
-    if args.resume_from_checkpoint:
-        # Checkpoints end in an '_epoch' suffix denoting the checkpoint epoch.
-        n_dataset_epochs -= int(args.resume_from_checkpoint.split('_')[-1])
-
     train_dataset = None
     valid_dataset = None
     create_dataset_with_args = partial(
