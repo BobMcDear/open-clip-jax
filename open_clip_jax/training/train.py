@@ -4,6 +4,7 @@ Core code for training CLIP models.
 
 
 import logging
+import re
 import time
 from typing import Any, Iterable, Optional, Tuple
 from functools import partial
@@ -101,7 +102,7 @@ def save_checkpoint(
         ckpt_dir=checkpoint_dir,
         target=jax.device_get(state),
         step=epoch,
-        prefix='checkpoint_epoch_',
+        prefix='epoch_',
         keep=5,
         )
 
@@ -274,8 +275,10 @@ def train_and_validate(
 
     begin_epoch = 1
     if resume_from_checkpoint:
-        # Checkpoints end in an '_epoch' suffix denoting the checkpoint epoch.
-        begin_epoch = int(resume_from_checkpoint.split('_')[-1]) + 1
+        # Checkpoints contain an 'epoch_{epoch_number}' pattern indicating
+        # the checkpointed epoch.
+        match = re.search(r'epoch_(\d+)', resume_from_checkpoint)
+        begin_epoch = int(match.group(1)) + 1
         state = checkpoints.restore_checkpoint(
             ckpt_dir=resume_from_checkpoint,
             target=state,
@@ -290,7 +293,7 @@ def train_and_validate(
 
     loss_meter = AvgMeter()
     time_meter = AvgMeter()
-    checkpoint_dir = checkpoint_dir or time.strftime('checkpoint-%Y-%m-%d-%H-%M', time.gmtime())
+    checkpoint_dir = checkpoint_dir or time.strftime('checkpoints-%Y-%m-%d-%H-%M', time.gmtime())
 
     for epoch in range(begin_epoch, n_epochs + 1):
         logging.info(f'Beginning epoch {epoch}...')
