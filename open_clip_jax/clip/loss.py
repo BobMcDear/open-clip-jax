@@ -53,9 +53,8 @@ def generate_labels(batch_size_per_process: int) -> Array:
     labels = jnp.reshape(labels, (n_local_devices, -1))
 
     # Labels are sharded so they don't have to be transferred to the appropriate
-    # device each time in pmaps.
-    shards = [labels[device_ind] for device_ind in range(n_local_devices)]
-    sharded = jax.device_put_sharded(shards, devices=local_devices)
+    # devices each time in pmaps.
+    sharded = jax.device_put_sharded(list(labels), devices=local_devices)
     return sharded
 
 
