@@ -87,7 +87,10 @@ def clip_loss(
         logits_per_text = logits_per_image.T
 
     else:
-        all_image_proj, all_text_proj = all_gather((image_proj, text_proj))
+        all_image_proj, all_text_proj = all_gather(
+            (image_proj, text_proj),
+            device_axis_name=device_axis_name,
+            )
         logits_per_image = image_proj @ all_text_proj.T
         logits_per_text = text_proj @ all_image_proj.T
 
