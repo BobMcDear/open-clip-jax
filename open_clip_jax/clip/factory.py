@@ -113,7 +113,7 @@ def list_pretrained_by_model(model_name: str) -> Tuple[str, ...]:
 
 def create_model(
     model_name: str,
-    temp_init: Optional[float] = 2.6593,
+    temp_init: Optional[float] = None,
     dtype: Dtype = jnp.float32,
     ) -> CLIP:
     """
@@ -196,7 +196,7 @@ def download_pretrained_params(
 
 def create_model_with_params(
     model_name: str,
-    temp_init: Optional[float] = 2.6593,
+    temp_init: Optional[float] = None,
     image_size: int = 224,
     context_len: int = 77,
     pretrained: Union[str, bool] = True,

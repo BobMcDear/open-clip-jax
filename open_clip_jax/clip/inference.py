@@ -100,7 +100,6 @@ class CLIPInference:
 
         self.model, vars = create_model_with_params(
             model_name,
-            temp_init=None,
             pretrained=pretrained,
             dtype=dtype,
             )

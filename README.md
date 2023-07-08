@@ -58,7 +58,6 @@ from open_clip_jax import create_image_transforms, create_model_with_params, tok
 
 model, vars = create_model_with_params(
     'vit-base-patch32',
-    temp_init=False,
     pretrained='laion2b-s34b-b79k',
     )
 image_transforms = create_image_transforms(

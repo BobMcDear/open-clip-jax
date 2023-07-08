@@ -47,7 +47,7 @@ class CLIP(nn.Module):
     proj_dim: int = 512
     proj_bias: bool = False
     norm: bool = True
-    temp_init: Optional[float] = 2.6593
+    temp_init: Optional[float] = None
     dtype: Dtype = jnp.float32
 
     @nn.compact
