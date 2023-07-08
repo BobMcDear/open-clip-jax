@@ -45,17 +45,20 @@ probs, _ = clip(image, text)
 print(probs)
 ```
 
-Under the hood, ```CLIPInference``` utilizes ```create_model_with_params``` to create the CLIP model, ```create_image_transforms``` to pre-process the image(s), and ```tokenize``` to tokenize the text(s). A sample usage of these functions, equivalent to the code above, is exhibited in the following snippet. Breaking ```CLIPInference``` into these smaller components offers greater flexibility.
+Under the hood, ```CLIPInference``` utilizes ```create_model_with_params``` to create the CLIP model, ```create_image_transforms``` to pre-process the image(s), and ```tokenize``` to tokenize the text(s). A sample usage of these functions, equivalent to the code above, is exhibited in the following snippet. Breaking ```CLIPInference``` into these smaller components can offer greater flexibility.
 
 ```python
+from typing import Dict
+
 import jax
 from PIL import Image
-from open_clip_jax import create_model_with_params, preprocess_image, tokenize
+from jax import Array
+from open_clip_jax import create_image_transforms, create_model_with_params, tokenize
 
 
 model, vars = create_model_with_params(
     'vit-base-patch32',
-    softmax_temp=100.,
+    temp_init=False,
     pretrained='laion2b-s34b-b79k',
     )
 image_transforms = create_image_transforms(
@@ -63,10 +66,17 @@ image_transforms = create_image_transforms(
     input_format='image',
     do_batch_transforms=False,
     )
-image = image_transforms(Image.open('CLIP.png').convert('RGB'))
+
+image = image_transforms(Image.open('CLIP.png').convert('RGB'))._numpy()
+image = np.expand_dims(image, axis=0)
 text = tokenize(['A diagram', 'A dog', 'A cat'])._numpy()
 
-probs, _ = jax.jit(model.apply)(vars, image, text)
+def calculate_similarity(vars: Dict, image: Array, text: Array) -> Array:
+    # CLIP returns L2-normalized image and text features.
+    image_proj, text_proj = model.apply(vars, image, text)
+    return nn.softmax(100 * image_proj @ text_proj.T)
+
+probs = jax.jit(calculate_similarity)(vars, image, text)
 print(probs)
 ```
 
