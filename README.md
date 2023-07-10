@@ -85,7 +85,7 @@ This repository also supports training CLIP models from scratch, using either th
 
 ### Dataset Preparation
 
-```main.py``` accepts two data formats, CSV files or TFRecords. The latter should generally be preferred as ```tf.data``` pipelines constructed around TFRecords are quite efficient, especially if the data is stored remotely, but training using CSV files can be more convenient and should not be an issue when dealing with smaller datasets. Dataset preparation instructions for both these cases are outlined below.
+```main.py``` accepts two data formats, CSV files or TFRecords. The latter should generally be preferred as ```tf.data``` pipelines constructed around TFRecords are quite efficient, especially if the data is stored remotely, but training using CSV files can be more convenient and should not be an issue when dealing with smaller datasets. Dataset preparation instructions for each case are outlined below.
 
 #### CSV
 
@@ -171,6 +171,8 @@ gcloud compute tpus tpu-vm ssh $NAME \
 gcloud compute tpus tpu-vm delete $NAME \
     --zone $ZONE
 ```
+
+An important caveat that should be borne in mind is that epoch boundaries become blurry if the number of batches assigned to each worker varies. For example, suppose a dataset consists of two TFRecord files, one containing 32 samples and the other 64, and training is being performed on two workers (each receiving one TFRecord file) with a per-worker batch size of 16: In this scenario, the number of steps per epoch is calculated to be 3 = (64 + 32) / 32 (the 32 in the denominator is the global batch size), so 3 batches, or 48 = 16 * 3 samples, are taken from each file in every epoch. Consequently, during the initial epoch, half the samples from the first file are iterated over twice, whereas there are samples in the second file that are not seen at all. In the subsequent epoch, however, the remaining samples from the second file will be the first to be grabbed, and the process restarts once the entire file has been consumed. Such extreme discrepancies should be rare as the number of files increases and are unlikely to pose a problem in practice, but one should be cognizant of them nevertheless.
 
 ## Available Models
 
