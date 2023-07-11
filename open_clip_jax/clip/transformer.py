@@ -90,6 +90,9 @@ class Transformer(nn.Module):
         mlp_bias: Whether the linear layers in the MLPs should contain bias
             terms.
         eps: Epsilon value passed to the layer normalization modules.
+        grad_checkpoint: Whether to perform gradient checkpointing on the
+            transformer blocks. If True, intermediate activations are not stored
+            and are recomputed during backpropagation.
         dtype: The data type of the computations.
     """
     depth: int
@@ -99,6 +102,7 @@ class Transformer(nn.Module):
     attention_bias: bool = True
     mlp_bias: bool = True
     eps: float = 1e-5
+    grad_checkpoint: bool = False
     dtype: Dtype = jnp.float32
 
     @nn.compact
@@ -113,8 +117,9 @@ class Transformer(nn.Module):
         Returns:
             Output of the transformer.
         """
+        block = nn.remat(TransformerBlock) if self.grad_checkpoint else TransformerBlock
         for _ in range(self.depth):
-            input = TransformerBlock(
+            input = block(
                 n_heads=self.n_heads,
                 expansion_factor=self.expansion_factor,
                 act=self.act,
@@ -231,6 +236,9 @@ class VisionTransformer(nn.Module):
         eps: Epsilon value passed to the layer normalization modules.
         global_pool: Whether to globally average pool the tokens before
             returning. If False, only the class token is returned.
+        grad_checkpoint: Whether to perform gradient checkpointing on the
+            transformer blocks. If True, intermediate activations are not stored
+            and are recomputed during backpropagation.
         dtype: The data type of the computations.
     """
     depth: int
@@ -244,6 +252,7 @@ class VisionTransformer(nn.Module):
     mlp_bias: bool = True
     eps: float = 1e-5
     global_pool: bool = False
+    grad_checkpoint: bool = False
     dtype: Dtype = jnp.float32
 
     @nn.compact
@@ -271,6 +280,7 @@ class VisionTransformer(nn.Module):
                 epsilon=self.eps,
                 dtype=self.dtype,
                 )(output)
+
         output = Transformer(
             depth=self.depth,
             n_heads=self.n_heads,
@@ -279,13 +289,16 @@ class VisionTransformer(nn.Module):
             attention_bias=self.attention_bias,
             mlp_bias=self.mlp_bias,
             eps=self.eps,
+            grad_checkpoint=self.grad_checkpoint,
             dtype=self.dtype,
             )(output)
 
         if self.global_pool:
             pooled = global_avg_pool(output)
+
         else:
             pooled = output[:, 0]
+
         pooled = nn.LayerNorm(
                 epsilon=self.eps,
                 dtype=self.dtype,
@@ -312,6 +325,9 @@ class TextTransformer(nn.Module):
         eps: Epsilon value passed to the layer normalization modules.
         global_pool: Whether to globally average pool the tokens before
             returning. If False, only the end-of-stream token is returned.
+        grad_checkpoint: Whether to perform gradient checkpointing on the
+            transformer blocks. If True, intermediate activations are not stored
+            and are recomputed during backpropagation.
         dtype: The data type of the computations.
     """
     depth: int
@@ -324,6 +340,7 @@ class TextTransformer(nn.Module):
     mlp_bias: bool = True
     eps: float = 1e-5
     global_pool: bool = False
+    grad_checkpoint: bool = False
     dtype: Dtype = jnp.float32
 
     @nn.compact
@@ -352,6 +369,7 @@ class TextTransformer(nn.Module):
             attention_bias=self.attention_bias,
             mlp_bias=self.mlp_bias,
             eps=self.eps,
+            grad_checkpoint=self.grad_checkpoint,
             dtype=self.dtype,
             )(output, mask=nn.make_causal_mask(input, dtype=input.dtype))
 
@@ -360,8 +378,10 @@ class TextTransformer(nn.Module):
                 epsilon=self.eps,
                 dtype=self.dtype,
                 )(output)
+
         if self.global_pool:
             pooled = global_avg_pool(output)
+
         else:
             # The end-of-stream token is always the highest.
             pooled = output[jnp.arange(len(input)), jnp.argmax(input, axis=1)]

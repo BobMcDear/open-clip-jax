@@ -129,6 +129,15 @@ def parse_args() -> Namespace:
         help='Initial value for a learnable temperature coefficient the logits are scaled by when calculating the loss, with None for no scaling.',
         )
     parser.add_argument(
+        '--grad-checkpoint',
+        action='store_true',
+        default=False,
+        help=(
+            'Whether to perform gradient checkpointing on the transformer blocks of the image and text towers. '
+            'If True, intermediate activations are not stored and are recomputed during backpropagation.'
+            ),
+        )
+    parser.add_argument(
         '--dtype',
         type=str,
         choices=['float32', 'float16', 'bfloat16'],
@@ -320,7 +329,12 @@ def main(args: Namespace) -> None:
 
     logging.info('Creating model...')
     dtype = getattr(jnp, args.dtype)
-    model = create_model(args.model_name, temp_init=args.temp_init, dtype=dtype)
+    model = create_model(
+        args.model_name,
+        temp_init=args.temp_init,
+        grad_checkpoint=args.grad_checkpoint,
+        dtype=dtype,
+        )
     vars = jax.jit(model.init, backend='cpu')(
         rngs=jax.random.PRNGKey(0),
         image_input=jnp.empty((1, args.image_size, args.image_size, 3), dtype=dtype),

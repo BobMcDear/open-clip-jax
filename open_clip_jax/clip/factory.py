@@ -114,6 +114,7 @@ def list_pretrained_by_model(model_name: str) -> Tuple[str, ...]:
 def create_model(
     model_name: str,
     temp_init: Optional[float] = None,
+    grad_checkpoint: bool = False,
     dtype: Dtype = jnp.float32,
     ) -> CLIP:
     """
@@ -124,6 +125,9 @@ def create_model(
             options.
         temp_init: Initial value for a learnable temperature coefficient CLIP's
             projected image vectors are scaled by, with None for no scaling.
+        grad_checkpoint: Whether to perform gradient checkpointing on the
+            transformer blocks of the image and text towers. If True, intermediate
+            activations are not stored and are recomputed during backpropagation.
         dtype: The data type of the CLIP model.
 
     Returns:
@@ -136,8 +140,15 @@ def create_model(
 
     if model_name.startswith('vit'):
         configs = MODEL_CONFIGS[model_name]
-        image_model = VisionTransformer(**configs['image_model'], dtype=dtype)
-        text_model = TextTransformer(**configs['text_model'], dtype=dtype)
+        image_model = VisionTransformer(
+            **configs['image_model'],
+            grad_checkpoint=grad_checkpoint,
+            dtype=dtype,
+            )
+        text_model = TextTransformer(
+            **configs['text_model'],
+            grad_checkpoint=grad_checkpoint,
+            dtype=dtype)
         proj_dim = configs['proj_dim']
 
     return CLIP(
@@ -200,6 +211,7 @@ def create_model_with_params(
     image_size: int = 224,
     context_len: int = 77,
     pretrained: Union[str, bool] = True,
+    grad_checkpoint: bool = False,
     dtype: Dtype = jnp.float32,
     ) -> Tuple[CLIP, Dict]:
     """
@@ -219,6 +231,9 @@ def create_model_with_params(
             parameters to return, with True for the most performant set of
             parameters. See list_pretrained or list_pretrained_by_model for
             available options.
+        grad_checkpoint: Whether to perform gradient checkpointing on the
+            transformer blocks of the image and text towers. If True, intermediate
+            activations are not stored and are recomputed during backpropagation.
         dtype: The data type of the CLIP model.
 
     Returns:
@@ -227,7 +242,12 @@ def create_model_with_params(
     if pretrained is not False:
         pretrained_params = download_pretrained_params(model_name, pretrained)
 
-    model = create_model(model_name, temp_init=temp_init, dtype=dtype)
+    model = create_model(
+        model_name,
+        temp_init=temp_init,
+        grad_checkpoint=grad_checkpoint,
+        dtype=dtype,
+        )
     vars = model.init(
         rngs=jax.random.PRNGKey(0),
         image_input=jnp.empty((1, image_size, image_size, 3), dtype=dtype),
