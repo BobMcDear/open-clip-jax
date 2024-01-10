@@ -139,11 +139,20 @@ class PatchEmbed(nn.Module):
         embed_dim: Embedding dimension.
         patch_size: Patch size.
         bias: Whether the projection transformation should contain bias terms.
+        eps: Epsilon value passed to a layer normalization module applied
+            prior to the linear transformation.
+            If None, no layer normalization is applied.
+        norm_first: Whether to apply layer normalization before or after
+            the projection transformation if eps is not None.
+        flatten: Whether to flatten the embeddings before returning.
         dtype: The data type of the computations.
     """
     embed_dim: int
     patch_size: int = 16
     bias: bool = True
+    eps: Optional[float] = None
+    norm_first: bool = False
+    flatten: bool = True
     dtype: Dtype = jnp.float32
 
     @nn.compact
@@ -157,6 +166,11 @@ class PatchEmbed(nn.Module):
         Returns:
             Flattened patch embeddings.
         """
+        layer_norm = nn.LayerNorm(self.eps) if self.eps else lambda x: x
+
+        if self.norm_first:
+            input = layer_norm(input)
+
         output = nn.Conv(
             features=self.embed_dim,
             kernel_size=(self.patch_size, self.patch_size),
@@ -165,7 +179,13 @@ class PatchEmbed(nn.Module):
             use_bias=self.bias,
             dtype=self.dtype,
             )(input)
-        output = jnp.reshape(output, (len(output), -1, self.embed_dim))
+
+        if not self.norm_first:
+            output = layer_norm(output)
+
+        if self.flatten:
+            output = jnp.reshape(output, (len(output), -1, self.embed_dim))
+
         return output
 
 
