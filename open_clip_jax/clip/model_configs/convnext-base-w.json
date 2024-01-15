@@ -1,0 +1,12 @@
+{
+	"image_model": {
+		"depths": [3, 3, 27, 3],
+        "out_dims": [128, 256, 512, 1024]
+	},
+	"text_model": {
+		"depth": 12,
+		"embed_dim": 640,
+		"n_heads": 10
+	},
+    "proj_dim": 640
+}

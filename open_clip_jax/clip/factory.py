@@ -13,6 +13,7 @@ from flax.linen.dtypes import Dtype
 from huggingface_hub import hf_hub_download
 from jax import numpy as jnp
 
+from .convnext import ConvNeXt
 from .model import CLIP
 from .transformer import TextTransformer, VisionTransformer
 
@@ -137,24 +138,31 @@ def create_model(
         ValueError: Model of name model_name does not exist.
     """
     check_model_exists(model_name)
+    configs = MODEL_CONFIGS[model_name]
 
     if model_name.startswith('vit'):
-        configs = MODEL_CONFIGS[model_name]
         image_model = VisionTransformer(
             **configs['image_model'],
             grad_checkpoint=grad_checkpoint,
             dtype=dtype,
             )
-        text_model = TextTransformer(
-            **configs['text_model'],
+
+    elif model_name.startswith('convnext'):
+        image_model = ConvNeXt(
+            **configs['image_model'],
             grad_checkpoint=grad_checkpoint,
-            dtype=dtype)
-        proj_dim = configs['proj_dim']
+            dtype=dtype,
+            )
+
+    text_model = TextTransformer(
+        **configs['text_model'],
+        grad_checkpoint=grad_checkpoint,
+        dtype=dtype)
 
     return CLIP(
         image_model=image_model,
         text_model=text_model,
-        proj_dim=proj_dim,
+        proj_dim=configs['proj_dim'],
         temp_init=temp_init,
         dtype=dtype,
         )
