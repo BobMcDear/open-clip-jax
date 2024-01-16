@@ -25,7 +25,7 @@ def register_configs():
     Registers model configurations under model_configs/ at MODEL_CONFIGS.
     """
     path_configs = Path(__file__).parent/'model_configs/'
-    for path in path_configs.glob('*.json'):
+    for path in sorted(list(path_configs.glob('*.json'))):
         model_name = path.name.split('.')[0]
         with open(path, mode='r') as file:
             MODEL_CONFIGS[model_name] = json.load(file)
@@ -34,6 +34,12 @@ register_configs()
 
 # Maps CLIP architectures to their available pre-trained parameters.
 PRETRAINED = {
+    'convnext-base': ('laion400m-s13b-b51k',),
+    'convnext-base-w': ('laion-aesthetic-s13b-b82k', 'laion-aesthetic-s13b-b82k-320',
+                        'laion-aesthetic-s13b-b82k-augreg-320', 'laion2b-s13b-b82k',
+                        'laion2b-s13b-b82k-augreg'),
+    'convnext-large-d': ('laion2b-s26b-b102k-augreg', 'laion2b-s29b-b131k-ft-320',
+                         'laion2b-s29b-b131k-ft-soup-320'),
     'vit-base-patch32': ('laion400m-e31', 'laion400m-e32', 'laion2b-e16', 'laion2b-s34b-b79k'),
     'vit-base-patch16': ('laion400m-e31', 'laion400m-e32', 'laion2b-s34b-b88k'),
     'vit-large-patch14': ('laion400m-e31', 'laion400m-e32', 'laion2b-s32b-b82k'),
@@ -148,7 +154,11 @@ def create_model(
             )
 
     elif model_name.startswith('convnext'):
+        conf = configs['image_model']
+        depths = tuple(conf.pop('depths'))
+        out_dims = tuple(conf.pop('out_dims'))
         image_model = ConvNeXt(
+            depths, out_dims,
             **configs['image_model'],
             grad_checkpoint=grad_checkpoint,
             dtype=dtype,
