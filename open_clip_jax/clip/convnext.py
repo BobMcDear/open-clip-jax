@@ -171,6 +171,8 @@ class ConvNeXt(nn.Module):
                 stride=1 if ind == 0 else 2,
                 layer_scale_init_value=self.layer_scale_init_value,
                 eps=self.eps,
+                grad_checkpoint=self.grad_checkpoint,
+                dtype=self.dtype,
                 )(output)
 
         pooled = global_avg_pool(output, axis=(-3, -2))
