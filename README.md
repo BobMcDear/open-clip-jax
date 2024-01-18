@@ -186,17 +186,29 @@ there may be multiple entries with identical model names but different pre-train
 ```python
 >>> import open_clip_jax
 >>> open_clip_jax.list_models()
-('vit-large-patch14',
- 'vit-small-patch32',
- 'vit-huge-patch14',
- 'vit-small-patch16',
- 'vit-nano-patch32',
- 'vit-huge-patch16',
- 'vit-large-patch16',
+('convnext-base-w',
+ 'convnext-base',
+ 'convnext-large-d',
  'vit-base-patch16',
- 'vit-base-patch32')
+ 'vit-base-patch32',
+ 'vit-huge-patch14',
+ 'vit-huge-patch16',
+ 'vit-large-patch14',
+ 'vit-large-patch16',
+ 'vit-nano-patch32',
+ 'vit-small-patch16',
+ 'vit-small-patch32')
 >>> open_clip_jax.list_pretrained()
-(('vit-base-patch32', 'laion400m-e31'),
+(('convnext-base', 'laion400m-s13b-b51k'),
+ ('convnext-base-w', 'laion-aesthetic-s13b-b82k'),
+ ('convnext-base-w', 'laion-aesthetic-s13b-b82k-320'),
+ ('convnext-base-w', 'laion-aesthetic-s13b-b82k-augreg-320'),
+ ('convnext-base-w', 'laion2b-s13b-b82k'),
+ ('convnext-base-w', 'laion2b-s13b-b82k-augreg'),
+ ('convnext-large-d', 'laion2b-s26b-b102k-augreg'),
+ ('convnext-large-d', 'laion2b-s29b-b131k-ft-320'),
+ ('convnext-large-d', 'laion2b-s29b-b131k-ft-soup-320'),
+ ('vit-base-patch32', 'laion400m-e31'),
  ('vit-base-patch32', 'laion400m-e32'),
  ('vit-base-patch32', 'laion2b-e16'),
  ('vit-base-patch32', 'laion2b-s34b-b79k'),
