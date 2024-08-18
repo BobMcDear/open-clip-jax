@@ -10,7 +10,7 @@ setup(
 	url='https://github.com/bobmcdear/open-clip-jax',
 	packages=find_packages(),
 	install_requires=[
-        'flax',
+        'flax<=0.8.0',
 		'huggingface_hub',
 		'optax',
 		'tensorflow',
