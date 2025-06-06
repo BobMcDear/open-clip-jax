@@ -41,7 +41,7 @@ PRETRAINED = {
     'convnext-large-d': ('laion2b-s26b-b102k-augreg', 'laion2b-s29b-b131k-ft-320',
                          'laion2b-s29b-b131k-ft-soup-320'),
     'vit-base-patch32': ('laion400m-e31', 'laion400m-e32', 'laion2b-e16', 'laion2b-s34b-b79k'),
-    'vit-base-patch16': ('laion400m-e31', 'laion400m-e32', 'laion2b-s34b-b88k'),
+    'vit-base-patch16': ('laion400m-e31', 'laion400m-e32', 'laion2b-s34b-b88k', 'dfn2b'),
     'vit-large-patch14': ('laion400m-e31', 'laion400m-e32', 'laion2b-s32b-b82k'),
     'vit-huge-patch14': ('laion2b-s32b-b79k',),
     }
