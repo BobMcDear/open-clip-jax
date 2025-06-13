@@ -212,6 +212,8 @@ there may be multiple entries with identical model names but different pre-train
  ('vit-base-patch32', 'laion400m-e32'),
  ('vit-base-patch32', 'laion2b-e16'),
  ('vit-base-patch32', 'laion2b-s34b-b79k'),
+ ('vit-base-patch32', 'datacomp-m-s128m-b4k'),
+ ('vit-base-patch32', 'datacomp-xl-s13b-b90k'),
  ('vit-base-patch16', 'laion400m-e31'),
  ('vit-base-patch16', 'laion400m-e32'),
  ('vit-base-patch16', 'laion2b-s34b-b88k'),
