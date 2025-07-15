@@ -42,7 +42,8 @@ PRETRAINED = {
                          'laion2b-s29b-b131k-ft-soup-320'),
     'vit-base-patch32': ('laion400m-e31', 'laion400m-e32', 'laion2b-e16', 'laion2b-s34b-b79k',
                          'datacomp-m-s128m-b4k', 'datacomp-xl-s13b-b90k'),
-    'vit-base-patch16': ('laion400m-e31', 'laion400m-e32', 'laion2b-s34b-b88k', 'dfn2b'),
+    'vit-base-patch16': ('laion400m-e31', 'laion400m-e32', 'laion2b-s34b-b88k',
+                         'dfn2b', 'datacomp-xl-s13b-b90k'),
     'vit-large-patch14': ('laion400m-e31', 'laion400m-e32', 'laion2b-s32b-b82k'),
     'vit-huge-patch14': ('laion2b-s32b-b79k'),
     }
